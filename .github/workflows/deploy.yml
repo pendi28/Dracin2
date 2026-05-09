@@ -3,32 +3,25 @@ name: Deploy to Firebase Hosting
 on:
   push:
     branches:
-      - main   # Ganti ke "master" jika branch utama kamu adalah master
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout kode dari repo
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js 20
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: functions/package-lock.json
 
-      # 3. Install dependencies Cloud Functions
       - name: Install Functions Dependencies
         run: npm install
         working-directory: functions
 
-      # 4. Set admin password sebagai Firebase Functions config
-      #    Nilai diambil dari GitHub Secret ADMIN_KEY
       - name: Set Firebase Functions Config
         uses: w9jds/firebase-action@master
         with:
@@ -36,7 +29,6 @@ jobs:
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      # 5. Deploy semuanya: Hosting + Functions + Firestore rules
       - name: Deploy to Firebase
         uses: w9jds/firebase-action@master
         with:
