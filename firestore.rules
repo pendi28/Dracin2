@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Siapapun bisa baca drama dan episode (untuk player)
+    match /dramas/{bookId} {
+      allow read: if true;
+      allow write: if false; // hanya via Admin SDK (Cloud Functions)
+    }
+
+    match /episodes/{bookId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Settings hanya bisa dibaca Cloud Functions
+    match /settings/{doc} {
+      allow read, write: if false;
+    }
+  }
+}
