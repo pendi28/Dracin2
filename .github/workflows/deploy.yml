@@ -18,6 +18,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install Firebase Tools
+        run: npm install -g firebase-tools
+
       - name: Install Functions Dependencies
         run: npm install
         working-directory: functions
@@ -27,8 +30,6 @@ jobs:
           echo '{"admin":{"key":"${{ secrets.ADMIN_KEY }}"}}' > functions/.runtimeconfig.json
 
       - name: Deploy to Firebase
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --non-interactive
+        run: firebase deploy --non-interactive
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
