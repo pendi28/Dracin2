@@ -5,7 +5,7 @@
     "rewrites": [
       {
         "source": "/api/**",
-        "destination": "https://NAMA-APP-KAMU.vercel.app/api/**"
+        "destination": "https://dracin2-woad.vercel.app//api/**"
       }
     ]
   },
