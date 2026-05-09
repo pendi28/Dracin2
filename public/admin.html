@@ -1,597 +1,538 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel — Pendi Player</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pendi Drama — Admin Panel</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        /* ── Login Screen ── */
-        #loginScreen {
-            display: flex; flex-direction: column; align-items: center;
-            justify-content: center; min-height: 100vh; gap: 16px; padding: 24px;
-        }
-        #loginScreen h2 { font-size: 1.1rem; color: #2dd4bf; }
-        #loginScreen p  { font-size: 0.8rem; color: #8b949e; }
-        .login-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 28px; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f0f13;
+    color: #e2e2e2;
+    min-height: 100vh;
+  }
 
-        /* ── Main UI ── */
-        #adminUI { display: none; }
-        header { padding: 14px 18px; border-bottom: 1px solid #21262d; background: rgba(13,17,23,0.96); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 12px; }
-        .back-btn { background: none; border: none; color: #2dd4bf; font-size: 1.4rem; cursor: pointer; padding: 4px 8px; border-radius: 6px; display: none; }
-        header h1 { font-size: 1rem; font-weight: 700; flex: 1; }
-        .badge { font-size: 0.68rem; background: rgba(45,212,191,0.15); color: #2dd4bf; padding: 3px 10px; border-radius: 6px; white-space: nowrap; }
+  /* ── Login Screen ── */
+  #login-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  #login-screen h1 { font-size: 1.6rem; margin-bottom: 8px; color: #fff; }
+  #login-screen p  { color: #888; margin-bottom: 28px; font-size: 0.9rem; }
+  #login-box {
+    background: #1a1a22;
+    border: 1px solid #2a2a35;
+    border-radius: 12px;
+    padding: 28px;
+    width: 100%;
+    max-width: 380px;
+  }
+  #login-box label { display: block; font-size: 0.82rem; color: #aaa; margin-bottom: 6px; }
+  #login-box input {
+    width: 100%; padding: 10px 14px;
+    background: #0f0f13; border: 1px solid #2a2a35;
+    border-radius: 8px; color: #fff; font-size: 0.95rem;
+    margin-bottom: 16px; outline: none;
+  }
+  #login-box input:focus { border-color: #6c63ff; }
 
-        /* ── Views ── */
-        #catalogView { padding: 16px; }
-        #dramaDetailView { display: none; padding: 16px; }
+  /* ── Main Layout ── */
+  #app { display: none; }
+  header {
+    background: #1a1a22;
+    border-bottom: 1px solid #2a2a35;
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 1.1rem; color: #fff; }
+  header span { font-size: 0.8rem; color: #888; }
 
-        /* ── Section headers ── */
-        .section-title { font-size: 0.76rem; color: #8b949e; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+  .container { max-width: 860px; margin: 0 auto; padding: 24px 16px; }
 
-        /* ── Action Cards ── */
-        .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .action-card {
-            background: #161b22; border: 1px solid #21262d; border-radius: 10px;
-            padding: 14px; cursor: pointer; transition: all 0.15s; text-align: center;
-        }
-        .action-card:hover { border-color: #2dd4bf; background: #1c2129; }
-        .action-card .icon { font-size: 1.5rem; margin-bottom: 6px; }
-        .action-card .label { font-size: 0.76rem; font-weight: 600; }
-        .action-card .sub { font-size: 0.68rem; color: #8b949e; margin-top: 2px; }
+  /* ── Cards ── */
+  .card {
+    background: #1a1a22;
+    border: 1px solid #2a2a35;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 0.95rem; font-weight: 600;
+    color: #fff; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .badge {
+    font-size: 0.7rem; padding: 2px 8px;
+    border-radius: 20px; font-weight: 500;
+  }
+  .badge-blue   { background: #1e3a5f; color: #60a5fa; }
+  .badge-green  { background: #14432a; color: #4ade80; }
+  .badge-red    { background: #3f1a1a; color: #f87171; }
+  .badge-yellow { background: #3f3010; color: #fbbf24; }
 
-        /* ── Add Drama ── */
-        .add-form { display: flex; gap: 8px; margin-bottom: 20px; }
+  /* ── Inputs & Buttons ── */
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .field { flex: 1; min-width: 160px; }
+  .field label { display: block; font-size: 0.78rem; color: #aaa; margin-bottom: 5px; }
+  .field input {
+    width: 100%; padding: 9px 12px;
+    background: #0f0f13; border: 1px solid #2a2a35;
+    border-radius: 8px; color: #fff; font-size: 0.9rem; outline: none;
+  }
+  .field input:focus { border-color: #6c63ff; }
 
-        /* ── Drama List ── */
-        .drama-list-item {
-            background: #161b22; border: 1px solid #21262d; border-radius: 10px;
-            padding: 12px 14px; margin-bottom: 8px;
-            display: flex; align-items: center; gap: 12px; cursor: pointer;
-            transition: all 0.15s;
-        }
-        .drama-list-item:hover { border-color: #30363d; background: #1c2129; }
-        .drama-thumb { width: 44px; height: 60px; border-radius: 6px; object-fit: cover; background: #21262d; flex-shrink: 0; }
-        .drama-info  { flex: 1; min-width: 0; }
-        .drama-info  .dtitle { font-size: 0.84rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .drama-info  .dmeta  { font-size: 0.7rem; color: #8b949e; margin-top: 2px; }
-        .drama-info  .dtags  { display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
-        .tag { font-size: 0.6rem; padding: 2px 7px; border-radius: 4px; }
-        .tag.ongoing  { background: rgba(45,212,191,0.15); color: #2dd4bf; }
-        .tag.complete { background: rgba(139,148,158,0.15); color: #8b949e; }
-        .tag.locked   { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .tag.ok       { background: rgba(34,197,94,0.15); color: #22c55e; }
-        .arrow { color: #8b949e; font-size: 1.1rem; }
+  button {
+    padding: 9px 18px; border: none; border-radius: 8px;
+    font-size: 0.88rem; font-weight: 600; cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  button:hover:not(:disabled) { opacity: 0.85; }
+  button:active:not(:disabled) { transform: scale(0.97); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        /* ── Drama Detail ── */
-        .detail-header { display: flex; gap: 14px; margin-bottom: 20px; padding: 14px; background: #161b22; border: 1px solid #21262d; border-radius: 10px; }
-        .detail-thumb  { width: 70px; height: 95px; border-radius: 8px; object-fit: cover; background: #21262d; flex-shrink: 0; }
-        .detail-meta   { flex: 1; min-width: 0; }
-        .detail-meta h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
-        .detail-meta p  { font-size: 0.74rem; color: #8b949e; line-height: 1.5; }
+  .btn-primary  { background: #6c63ff; color: #fff; }
+  .btn-green    { background: #22c55e; color: #fff; }
+  .btn-red      { background: #ef4444; color: #fff; }
+  .btn-yellow   { background: #f59e0b; color: #fff; }
+  .btn-ghost    {
+    background: transparent; color: #aaa;
+    border: 1px solid #2a2a35;
+  }
+  .btn-ghost:hover:not(:disabled) { color: #fff; border-color: #6c63ff; opacity: 1; }
 
-        /* ── Episode Grid ── */
-        .ep-controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-        .ep-grid-admin { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
-        .ep-item {
-            aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-            border-radius: 9px; border: 2px solid #21262d; cursor: pointer;
-            font-size: 0.68rem; font-weight: 600; text-align: center;
-            padding: 3px; line-height: 1.2; transition: all 0.15s; background: #161b22;
-            user-select: none;
-        }
-        .ep-item.ep-unlocked { border-color: #22c55e; color: #22c55e; }
-        .ep-item.ep-locked   { border-color: #ef4444; color: #555; background: #1a1010; }
-        .ep-item.ep-locked::after { content: '🔒'; display: block; font-size: 0.7rem; }
+  /* ── Log Box ── */
+  .log {
+    margin-top: 14px;
+    background: #0f0f13;
+    border: 1px solid #2a2a35;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.82rem;
+    font-family: monospace;
+    max-height: 180px;
+    overflow-y: auto;
+    display: none;
+  }
+  .log.show { display: block; }
+  .log-line { padding: 2px 0; line-height: 1.5; }
+  .log-ok   { color: #4ade80; }
+  .log-err  { color: #f87171; }
+  .log-info { color: #93c5fd; }
+  .log-warn { color: #fbbf24; }
 
-        /* ── Forms & Inputs ── */
-        input[type="text"], input[type="password"], select.select {
-            width: 100%; padding: 9px 12px; background: #161b22;
-            border: 1px solid #30363d; border-radius: 8px;
-            color: #e6edf3; font-size: 0.85rem; outline: none;
-        }
-        input:focus, select.select:focus { border-color: #2dd4bf; }
+  /* ── Spinner ── */
+  .spin {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ── Buttons ── */
-        .btn { padding: 9px 16px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; white-space: nowrap; }
-        .btn-primary  { background: #0d9488; color: #fff; }
-        .btn-primary:hover  { background: #0f766e; }
-        .btn-danger   { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
-        .btn-danger:hover   { background: rgba(239,68,68,0.25); }
-        .btn-secondary { background: #161b22; color: #e6edf3; border: 1px solid #30363d; }
-        .btn-secondary:hover { background: #1c2129; }
-        .btn-warning  { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
-        .btn-warning:hover   { background: rgba(234,179,8,0.25); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* ── API URL input ── */
+  #api-url-bar {
+    background: #1a1a22;
+    border-bottom: 1px solid #2a2a35;
+    padding: 10px 24px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.82rem;
+  }
+  #api-url-bar label { color: #888; white-space: nowrap; }
+  #api-url-bar input {
+    flex: 1; padding: 6px 10px;
+    background: #0f0f13; border: 1px solid #2a2a35;
+    border-radius: 6px; color: #fff; font-size: 0.82rem; outline: none;
+  }
+  #api-url-bar input:focus { border-color: #6c63ff; }
 
-        /* ── Toast ── */
-        .toast {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background: #1c2129; border: 1px solid #30363d; color: #e6edf3;
-            padding: 10px 20px; border-radius: 8px; font-size: 0.82rem;
-            z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; max-width: 90%;
-        }
-        .toast.show { opacity: 1; }
-        .toast.success { border-color: #22c55e; color: #22c55e; }
-        .toast.error   { border-color: #ef4444; color: #ef4444; }
-
-        /* ── Loading Overlay ── */
-        .overlay {
-            position: fixed; inset: 0; background: rgba(13,17,23,0.85);
-            display: none; align-items: center; justify-content: center;
-            flex-direction: column; gap: 14px; z-index: 9998; backdrop-filter: blur(4px);
-        }
-        .overlay.show { display: flex; }
-        .spinner { width: 36px; height: 36px; border: 3px solid #21262d; border-top-color: #2dd4bf; border-radius: 50%; animation: spin 0.75s linear infinite; }
-        .overlay-text { font-size: 0.88rem; color: #2dd4bf; text-align: center; max-width: 260px; line-height: 1.5; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* ── Lock Range ── */
-        .lock-range { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.8rem; }
-        .lock-range span { color: #8b949e; }
-        .lock-range input[type="number"] { width: 64px; padding: 6px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; font-size: 0.82rem; }
-
-        .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
-        .stat-card { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 12px; text-align: center; }
-        .stat-card .num { font-size: 1.4rem; font-weight: 700; color: #2dd4bf; }
-        .stat-card .lbl { font-size: 0.65rem; color: #8b949e; margin-top: 2px; }
-        .divider { border: none; border-top: 1px solid #21262d; margin: 16px 0; }
-    </style>
+  hr { border: none; border-top: 1px solid #2a2a35; margin: 8px 0 16px; }
+  .small { font-size: 0.78rem; color: #666; margin-top: 6px; }
+</style>
 </head>
 <body>
 
-<!-- ─── Firebase Config — ISI SESUAI PROJECT KAMU ─────────────────────────── -->
-<script type="module">
-import { initializeApp }              from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc,
-         collection, getDocs, updateDoc,
-         deleteDoc, setDoc }         from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+<!-- ── LOGIN ── -->
+<div id="login-screen">
+  <h1>🎬 Pendi Drama Admin</h1>
+  <p>Masukkan detail koneksi untuk masuk</p>
+  <div id="login-box">
+    <label>URL API (Vercel)</label>
+    <input type="url" id="inp-api" placeholder="https://nama-app.vercel.app" value="">
+    <label>Admin Key</label>
+    <input type="password" id="inp-key" placeholder="Password admin kamu">
+    <button class="btn-primary" style="width:100%" onclick="doLogin()">Masuk</button>
+    <p id="login-err" style="color:#f87171;font-size:0.8rem;margin-top:10px;display:none"></p>
+  </div>
+</div>
 
-// ⚠️ GANTI DENGAN FIREBASE CONFIG KAMU
-const firebaseConfig = {
-  apiKey: "AIzaSyAbq9J5HDASVnqn13VwRAOd_u1MdEWj3bE",
-  authDomain: "drama-short-668af.firebaseapp.com",
-  projectId: "drama-short-668af",
-  storageBucket: "drama-short-668af.firebasestorage.app",
-  messagingSenderId: "216564303270",
-  appId: "1:216564303270:web:13633390eb9543196a3b67",
-  measurementId: "G-0YYL4TZ490"
-};
+<!-- ── APP ── -->
+<div id="app">
+  <header>
+    <h1>🎬 Pendi Drama Admin</h1>
+    <span id="hdr-url"></span>
+  </header>
+  <div id="api-url-bar">
+    <label>API:</label>
+    <input type="text" id="bar-url" readonly>
+    <button class="btn-ghost" onclick="doLogout()" style="padding:5px 12px;font-size:0.8rem">Logout</button>
+  </div>
 
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+  <div class="container">
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let adminKey       = '';
-let allDramas      = [];
-let currentDrama   = null;
-let currentEps     = [];
-let lockedSet      = new Set();
+    <!-- Scrape Catalog -->
+    <div class="card">
+      <h2>📚 Scrape Katalog <span class="badge badge-blue">Semua Drama</span></h2>
+      <p class="small">Ambil semua daftar drama dari sumber dan simpan ke Firestore.</p>
+      <hr>
+      <div class="row" style="margin-top:4px">
+        <button class="btn-green" id="btn-catalog" onclick="scrapeCatalog()">▶ Mulai Scrape Katalog</button>
+      </div>
+      <div class="log" id="log-catalog"></div>
+    </div>
 
-// ── Elements ──────────────────────────────────────────────────────────────────
-const loginScreen      = document.getElementById('loginScreen');
-const adminUI          = document.getElementById('adminUI');
-const loginPass        = document.getElementById('loginPass');
-const loginBtn         = document.getElementById('loginBtn');
-const loginErr         = document.getElementById('loginErr');
-const catalogView      = document.getElementById('catalogView');
-const dramaDetailView  = document.getElementById('dramaDetailView');
-const dramaList        = document.getElementById('dramaList');
-const toastEl          = document.getElementById('toast');
-const overlay          = document.getElementById('overlay');
-const overlayText      = document.getElementById('overlayText');
-const backBtn          = document.getElementById('backBtn');
-const headerBadge      = document.getElementById('headerBadge');
+    <!-- Scrape Drama -->
+    <div class="card">
+      <h2>🎬 Scrape Drama <span class="badge badge-green">Per Drama</span></h2>
+      <p class="small">Ambil semua episode drama berdasarkan Book ID dan simpan ke Firestore.</p>
+      <hr>
+      <div class="row">
+        <div class="field">
+          <label>Book ID</label>
+          <input type="text" id="inp-scrape-id" placeholder="contoh: 12345">
+        </div>
+        <button class="btn-primary" id="btn-scrape" onclick="scrapeDrama()">▶ Scrape</button>
+      </div>
+      <div class="log" id="log-scrape"></div>
+    </div>
 
-// Stats
-const statTotal        = document.getElementById('statTotal');
-const statOngoing      = document.getElementById('statOngoing');
-const statLocked       = document.getElementById('statLocked');
+    <!-- Refresh Drama -->
+    <div class="card">
+      <h2>🔄 Refresh Drama <span class="badge badge-yellow">Update Episode</span></h2>
+      <p class="small">Re-scrape episode drama yang sudah ada (update data terbaru).</p>
+      <hr>
+      <div class="row">
+        <div class="field">
+          <label>Book ID</label>
+          <input type="text" id="inp-refresh-id" placeholder="contoh: 12345">
+        </div>
+        <button class="btn-yellow" id="btn-refresh" onclick="refreshDrama()">🔄 Refresh</button>
+      </div>
+      <div class="log" id="log-refresh"></div>
+    </div>
 
-// Detail
-const detailThumb      = document.getElementById('detailThumb');
-const detailTitle      = document.getElementById('detailTitle');
-const detailMeta       = document.getElementById('detailMeta');
-const detailEpGrid     = document.getElementById('detailEpGrid');
-const detailEpCount    = document.getElementById('detailEpCount');
-const lockFrom         = document.getElementById('lockFrom');
-const lockTo           = document.getElementById('lockTo');
+    <!-- Lock Episodes -->
+    <div class="card">
+      <h2>🔒 Lock Episode <span class="badge badge-yellow">Kelola Akses</span></h2>
+      <p class="small">Atur episode mana yang dikunci (pisahkan dengan koma, contoh: 1,2,3).</p>
+      <hr>
+      <div class="row">
+        <div class="field">
+          <label>Book ID</label>
+          <input type="text" id="inp-lock-id" placeholder="contoh: 12345">
+        </div>
+        <div class="field">
+          <label>Episode yang dikunci (chapterIndex)</label>
+          <input type="text" id="inp-lock-eps" placeholder="contoh: 1,2,3,4,5">
+        </div>
+        <button class="btn-yellow" id="btn-lock" onclick="lockEpisodes()">🔒 Simpan</button>
+      </div>
+      <div class="log" id="log-lock"></div>
+    </div>
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
-function toast(msg, type='', dur=3000) {
-    toastEl.textContent = msg;
-    toastEl.className   = 'toast show ' + type;
-    clearTimeout(toastEl._t);
-    toastEl._t = setTimeout(() => toastEl.classList.remove('show'), dur);
-}
+    <!-- Update Info Drama -->
+    <div class="card">
+      <h2>✏️ Update Info Drama <span class="badge badge-blue">Edit Metadata</span></h2>
+      <p class="small">Update judul, cover, status, atau tags drama.</p>
+      <hr>
+      <div class="row">
+        <div class="field">
+          <label>Book ID</label>
+          <input type="text" id="inp-info-id" placeholder="contoh: 12345">
+        </div>
+        <div class="field">
+          <label>Judul (opsional)</label>
+          <input type="text" id="inp-info-title" placeholder="Judul drama">
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="field">
+          <label>Cover URL (opsional)</label>
+          <input type="text" id="inp-info-cover" placeholder="https://...">
+        </div>
+        <div class="field">
+          <label>Status (opsional)</label>
+          <input type="text" id="inp-info-status" placeholder="Ongoing / Completed">
+        </div>
+        <div class="field">
+          <label>Tags (opsional)</label>
+          <input type="text" id="inp-info-tags" placeholder="Romance, Drama">
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn-primary" id="btn-info" onclick="updateInfo()">✏️ Update</button>
+      </div>
+      <div class="log" id="log-info"></div>
+    </div>
 
-// ── Overlay ───────────────────────────────────────────────────────────────────
-function showOverlay(msg) { overlayText.textContent = msg; overlay.classList.add('show'); }
-function hideOverlay()    { overlay.classList.remove('show'); }
+    <!-- Hapus Drama -->
+    <div class="card">
+      <h2>🗑️ Hapus Drama <span class="badge badge-red">Permanen</span></h2>
+      <p class="small">Hapus drama dan semua episode-nya dari Firestore. Tindakan ini tidak bisa dibatalkan.</p>
+      <hr>
+      <div class="row">
+        <div class="field">
+          <label>Book ID</label>
+          <input type="text" id="inp-del-id" placeholder="contoh: 12345">
+        </div>
+        <button class="btn-red" id="btn-del" onclick="deleteDrama()">🗑️ Hapus</button>
+      </div>
+      <div class="log" id="log-del"></div>
+    </div>
 
-// ── API Call ──────────────────────────────────────────────────────────────────
-async function api(path, body={}) {
-    const res = await fetch(path, {
-        method: 'POST', headers: { 'Content-Type':'application/json', 'x-admin-key': adminKey },
-        body: JSON.stringify({ ...body, adminKey })
+  </div>
+</div>
+
+<script>
+let API_URL = '';
+let ADMIN_KEY = '';
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const url = document.getElementById('inp-api').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('inp-key').value.trim();
+  const err = document.getElementById('login-err');
+  err.style.display = 'none';
+
+  if (!url || !key) { showLoginErr('URL API dan Admin Key wajib diisi.'); return; }
+
+  const btn = document.querySelector('#login-box button');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Memeriksa...';
+
+  try {
+    const res = await fetch(`${url}/api/admin/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminKey: key })
     });
-    return res.json();
+    const data = await res.json();
+    if (res.ok && data.success) {
+      API_URL = url;
+      ADMIN_KEY = key;
+      localStorage.setItem('pd_api', url);
+      localStorage.setItem('pd_key', key);
+      showApp();
+    } else {
+      showLoginErr(data.error || 'Admin key salah atau URL tidak valid.');
+    }
+  } catch(e) {
+    showLoginErr('Tidak bisa terhubung ke API. Pastikan URL Vercel benar.');
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'Masuk';
 }
 
-// ── Login ─────────────────────────────────────────────────────────────────────
-loginBtn.addEventListener('click', async () => {
-    const pass = loginPass.value.trim();
-    if (!pass) return;
-    loginBtn.disabled = true;
-    loginBtn.textContent = 'Memverifikasi...';
-    try {
-        const r = await fetch('/api/admin/verify', {
-            method: 'POST', headers: { 'Content-Type':'application/json', 'x-admin-key': pass },
-            body: JSON.stringify({ adminKey: pass })
-        });
-        const d = await r.json();
-        if (d.success) {
-            adminKey = pass;
-            loginScreen.style.display = 'none';
-            adminUI.style.display     = '';
-            loadCatalog();
-        } else {
-            loginErr.textContent = '❌ Password salah.';
-        }
-    } catch {
-        loginErr.textContent = '❌ Gagal terhubung ke server.';
-    }
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'Masuk';
+function showLoginErr(msg) {
+  const el = document.getElementById('login-err');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('hdr-url').textContent = API_URL;
+  document.getElementById('bar-url').value = API_URL;
+}
+
+function doLogout() {
+  localStorage.removeItem('pd_api');
+  localStorage.removeItem('pd_key');
+  location.reload();
+}
+
+// Auto-login dari localStorage
+window.addEventListener('DOMContentLoaded', () => {
+  const savedApi = localStorage.getItem('pd_api');
+  const savedKey = localStorage.getItem('pd_key');
+  if (savedApi) document.getElementById('inp-api').value = savedApi;
+  if (savedKey) document.getElementById('inp-key').value = savedKey;
 });
-loginPass.addEventListener('keydown', e => { if (e.key === 'Enter') loginBtn.click(); });
 
-// ── Load Catalog ──────────────────────────────────────────────────────────────
-async function loadCatalog() {
-    dramaList.innerHTML = '<p style="color:#8b949e;font-size:0.82rem;padding:20px 0;text-align:center">Memuat drama...</p>';
-    try {
-        const snap = await getDocs(collection(db, 'dramas'));
-        allDramas  = [];
-        snap.forEach(d => allDramas.push(d.data()));
-
-        const ongoing = allDramas.filter(d => d.status === 'Ongoing').length;
-        const locked  = allDramas.filter(d => d.lockedEpisodes?.length > 0).length;
-        statTotal.textContent   = allDramas.length;
-        statOngoing.textContent = ongoing;
-        statLocked.textContent  = locked;
-        headerBadge.textContent = allDramas.length + ' Drama';
-
-        renderDramaList(allDramas);
-    } catch(e) {
-        dramaList.innerHTML = `<p style="color:#ef4444;font-size:0.82rem;padding:20px 0;text-align:center">❌ ${e.message}</p>`;
-    }
+// ── Log Helper ────────────────────────────────────────────────────────────────
+function log(id, msg, type = 'info') {
+  const box = document.getElementById('log-' + id);
+  box.classList.add('show');
+  const line = document.createElement('div');
+  line.className = `log-line log-${type}`;
+  line.textContent = `[${new Date().toLocaleTimeString('id-ID')}] ${msg}`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
 }
 
-function renderDramaList(list) {
-    if (!list.length) {
-        dramaList.innerHTML = '<p style="color:#8b949e;font-size:0.82rem;padding:20px 0;text-align:center">Belum ada drama. Gunakan tombol "Scrape Katalog" di atas.</p>';
-        return;
-    }
-    dramaList.innerHTML = '';
-    list.forEach(d => {
-        const hasLock = d.lockedEpisodes?.length > 0;
-        const el = document.createElement('div');
-        el.className = 'drama-list-item';
-        el.innerHTML = `
-            <img class="drama-thumb" src="${d.cover}" onerror="this.style.background='#21262d';this.removeAttribute('src')">
-            <div class="drama-info">
-                <div class="dtitle">${d.title}</div>
-                <div class="dmeta">${d.totalEps || 0} ep · ID: ${d.bookId}</div>
-                <div class="dtags">
-                    <span class="tag ${d.status==='Ongoing'?'ongoing':'complete'}">${d.status||''}</span>
-                    ${hasLock ? `<span class="tag locked">🔒 ${d.lockedEpisodes.length} Locked</span>` : '<span class="tag ok">✓ Terbuka</span>'}
-                </div>
-            </div>
-            <span class="arrow">›</span>`;
-        el.addEventListener('click', () => openDramaDetail(d));
-        dramaList.appendChild(el);
-    });
+function clearLog(id) {
+  const box = document.getElementById('log-' + id);
+  box.innerHTML = '';
+  box.classList.add('show');
+}
+
+function setBtn(id, loading, label) {
+  const btn = document.getElementById('btn-' + id);
+  btn.disabled = loading;
+  btn.innerHTML = loading ? `<span class="spin"></span>${label}` : label;
+}
+
+// ── API Calls ─────────────────────────────────────────────────────────────────
+async function callApi(endpoint, method = 'POST', body = {}) {
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: method !== 'GET' ? JSON.stringify({ adminKey: ADMIN_KEY, ...body }) : undefined
+  });
+  return res.json();
 }
 
 // ── Scrape Catalog ────────────────────────────────────────────────────────────
-document.getElementById('scrapeCatalogBtn').addEventListener('click', async () => {
-    if (!confirm('Scrape ulang seluruh katalog dari DramaBox? Proses ini bisa memakan waktu 1-2 menit.')) return;
-    showOverlay('Scraping katalog drama...\nHarap tunggu, bisa 1-2 menit.');
-    try {
-        const r = await api('/api/admin/scrape-catalog');
-        if (r.success) { toast(`✅ ${r.message}`, 'success', 4000); loadCatalog(); }
-        else toast('❌ ' + r.error, 'error');
-    } catch(e) { toast('❌ ' + e.message, 'error'); }
-    hideOverlay();
-});
-
-// ── Add Drama by ID ───────────────────────────────────────────────────────────
-document.getElementById('addDramaBtn').addEventListener('click', async () => {
-    const bookId = document.getElementById('addDramaId').value.trim();
-    if (!bookId) return toast('Masukkan Book ID drama terlebih dahulu.', 'error');
-    if (!confirm(`Scrape drama dengan ID ${bookId}? Ini akan mengambil semua episode.`)) return;
-    showOverlay(`Scraping episode drama ${bookId}...\nHarap tunggu ±30-60 detik.`);
-    try {
-        const r = await api('/api/admin/scrape-drama', { bookId });
-        if (r.success) { toast(`✅ ${r.message}`, 'success', 4000); document.getElementById('addDramaId').value = ''; loadCatalog(); }
-        else toast('❌ ' + r.error, 'error');
-    } catch(e) { toast('❌ ' + e.message, 'error'); }
-    hideOverlay();
-});
-
-// ── Search ────────────────────────────────────────────────────────────────────
-document.getElementById('catalogSearch').addEventListener('input', function() {
-    const q = this.value.toLowerCase().trim();
-    renderDramaList(q ? allDramas.filter(d => d.title.toLowerCase().includes(q) || String(d.bookId).includes(q)) : allDramas);
-});
-
-// ── Drama Detail ──────────────────────────────────────────────────────────────
-async function openDramaDetail(drama) {
-    currentDrama = drama;
-    lockedSet    = new Set((drama.lockedEpisodes || []).map(Number));
-
-    catalogView.style.display     = 'none';
-    dramaDetailView.style.display = '';
-    backBtn.style.display         = 'inline-block';
-
-    detailThumb.src    = drama.cover;
-    detailTitle.textContent = drama.title;
-    detailMeta.innerHTML = `ID: <b>${drama.bookId}</b> · ${drama.totalEps||0} ep · ${drama.status||'-'}<br>
-        ${drama.tags||''}<br>
-        <small style="color:#555">Terakhir diperbarui: ${drama.lastScraped?.toDate ? drama.lastScraped.toDate().toLocaleString('id') : '-'}</small>`;
-
-    detailEpGrid.innerHTML = '<p style="color:#8b949e;font-size:0.78rem">Memuat episode...</p>';
-    detailEpCount.textContent = '';
-
-    try {
-        const snap = await getDoc(doc(db, 'episodes', String(drama.bookId)));
-        if (!snap.exists()) {
-            detailEpGrid.innerHTML = '<p style="color:#ef4444;font-size:0.78rem">Episode belum diambil. Klik "Refresh Episode" dulu.</p>';
-            return;
-        }
-        currentEps = snap.data().chapters || [];
-        renderEpGrid();
-    } catch(e) {
-        detailEpGrid.innerHTML = `<p style="color:#ef4444;font-size:0.78rem">❌ ${e.message}</p>`;
+async function scrapeCatalog() {
+  clearLog('catalog');
+  setBtn('catalog', true, 'Scraping...');
+  log('catalog', 'Memulai scrape katalog...', 'info');
+  try {
+    const data = await callApi('/api/admin/scrape-catalog');
+    if (data.success) {
+      log('catalog', `✅ Berhasil! ${data.total} drama disimpan ke Firestore.`, 'ok');
+    } else {
+      log('catalog', `❌ Error: ${data.error}`, 'err');
     }
+  } catch(e) {
+    log('catalog', `❌ Gagal terhubung: ${e.message}`, 'err');
+  }
+  setBtn('catalog', false, '▶ Mulai Scrape Katalog');
 }
 
-function renderEpGrid() {
-    detailEpCount.textContent = currentEps.length + ' Episode';
-    detailEpGrid.innerHTML = '';
-    currentEps.forEach(ep => {
-        const isLocked = lockedSet.has(Number(ep.chapterIndex));
-        const btn = document.createElement('div');
-        btn.className = 'ep-item ' + (isLocked ? 'ep-locked' : 'ep-unlocked');
-        btn.textContent = ep.title;
-        btn.title = (isLocked ? '🔒 Terkunci — klik untuk buka' : '✓ Terbuka — klik untuk kunci');
-        btn.addEventListener('click', () => {
-            const idx = Number(ep.chapterIndex);
-            if (lockedSet.has(idx)) lockedSet.delete(idx);
-            else lockedSet.add(idx);
-            btn.className = 'ep-item ' + (lockedSet.has(idx) ? 'ep-locked' : 'ep-unlocked');
-            btn.title = lockedSet.has(idx) ? '🔒 Terkunci — klik untuk buka' : '✓ Terbuka — klik untuk kunci';
-        });
-        detailEpGrid.appendChild(btn);
-    });
+// ── Scrape Drama ──────────────────────────────────────────────────────────────
+async function scrapeDrama() {
+  const bookId = document.getElementById('inp-scrape-id').value.trim();
+  if (!bookId) { alert('Book ID wajib diisi!'); return; }
+  clearLog('scrape');
+  setBtn('scrape', true, 'Scraping...');
+  log('scrape', `Scraping drama ${bookId}...`, 'info');
+  try {
+    const data = await callApi('/api/admin/scrape-drama', 'POST', { bookId });
+    if (data.success) {
+      log('scrape', `✅ Berhasil! ${data.total} episode disimpan.`, 'ok');
+    } else {
+      log('scrape', `❌ Error: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    log('scrape', `❌ Gagal terhubung: ${e.message}`, 'err');
+  }
+  setBtn('scrape', false, '▶ Scrape');
 }
-
-backBtn.addEventListener('click', () => {
-    catalogView.style.display     = '';
-    dramaDetailView.style.display = 'none';
-    backBtn.style.display         = 'none';
-    currentDrama = null; currentEps = []; lockedSet = new Set();
-});
-
-// ── Simpan Lock ───────────────────────────────────────────────────────────────
-document.getElementById('saveLockBtn').addEventListener('click', async () => {
-    if (!currentDrama) return;
-    const locked = Array.from(lockedSet);
-    showOverlay('Menyimpan pengaturan lock...');
-    try {
-        const r = await api('/api/admin/lock-episodes', { bookId: currentDrama.bookId, lockedEpisodes: locked });
-        if (r.success) {
-            currentDrama.lockedEpisodes = locked;
-            const idx = allDramas.findIndex(d => d.bookId === currentDrama.bookId);
-            if (idx !== -1) allDramas[idx].lockedEpisodes = locked;
-            toast(`✅ ${locked.length} episode dikunci.`, 'success');
-        } else toast('❌ ' + r.error, 'error');
-    } catch(e) { toast('❌ ' + e.message, 'error'); }
-    hideOverlay();
-});
-
-// ── Lock Range ────────────────────────────────────────────────────────────────
-document.getElementById('lockRangeBtn').addEventListener('click', () => {
-    const from = parseInt(lockFrom.value) || 1;
-    const to   = parseInt(lockTo.value)   || currentEps.length;
-    currentEps.forEach(ep => {
-        const idx = Number(ep.chapterIndex);
-        if (idx >= from && idx <= to) lockedSet.add(idx);
-    });
-    renderEpGrid();
-    toast(`🔒 Lock episode ${from}–${to}.`);
-});
-
-document.getElementById('unlockAllBtn').addEventListener('click', () => {
-    lockedSet.clear(); renderEpGrid(); toast('🔓 Semua episode dibuka.');
-});
-
-document.getElementById('lockAllBtn').addEventListener('click', () => {
-    currentEps.forEach(ep => lockedSet.add(Number(ep.chapterIndex)));
-    renderEpGrid(); toast('🔒 Semua episode dikunci.');
-});
 
 // ── Refresh Drama ─────────────────────────────────────────────────────────────
-document.getElementById('refreshDramaBtn').addEventListener('click', async () => {
-    if (!currentDrama) return;
-    if (!confirm(`Re-scrape semua episode drama "${currentDrama.title}"?\nProses ini memakan waktu ±30-60 detik.`)) return;
-    showOverlay(`Scraping ulang episode "${currentDrama.title}"...\nHarap tunggu ±60 detik.`);
-    try {
-        const r = await api('/api/admin/refresh-drama', { bookId: currentDrama.bookId });
-        if (r.success) {
-            toast(`✅ ${r.total} episode diperbarui.`, 'success', 4000);
-            await openDramaDetail(currentDrama);
-        } else toast('❌ ' + r.error, 'error');
-    } catch(e) { toast('❌ ' + e.message, 'error'); }
-    hideOverlay();
-});
+async function refreshDrama() {
+  const bookId = document.getElementById('inp-refresh-id').value.trim();
+  if (!bookId) { alert('Book ID wajib diisi!'); return; }
+  clearLog('refresh');
+  setBtn('refresh', true, 'Refresh...');
+  log('refresh', `Refresh drama ${bookId}...`, 'info');
+  try {
+    const data = await callApi('/api/admin/refresh-drama', 'POST', { bookId });
+    if (data.success) {
+      log('refresh', `✅ Berhasil! ${data.total} episode diperbarui.`, 'ok');
+    } else {
+      log('refresh', `❌ Error: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    log('refresh', `❌ Gagal terhubung: ${e.message}`, 'err');
+  }
+  setBtn('refresh', false, '🔄 Refresh');
+}
+
+// ── Lock Episodes ─────────────────────────────────────────────────────────────
+async function lockEpisodes() {
+  const bookId = document.getElementById('inp-lock-id').value.trim();
+  const epsRaw = document.getElementById('inp-lock-eps').value.trim();
+  if (!bookId) { alert('Book ID wajib diisi!'); return; }
+  const lockedEpisodes = epsRaw ? epsRaw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
+  clearLog('lock');
+  setBtn('lock', true, 'Menyimpan...');
+  log('lock', `Set lock episode untuk drama ${bookId}: [${lockedEpisodes.join(', ') || 'kosong (semua unlocked)'}]`, 'info');
+  try {
+    const data = await callApi('/api/admin/lock-episodes', 'POST', { bookId, lockedEpisodes });
+    if (data.success) {
+      log('lock', `✅ Berhasil! ${lockedEpisodes.length} episode dikunci.`, 'ok');
+    } else {
+      log('lock', `❌ Error: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    log('lock', `❌ Gagal terhubung: ${e.message}`, 'err');
+  }
+  setBtn('lock', false, '🔒 Simpan');
+}
 
 // ── Update Info ───────────────────────────────────────────────────────────────
-document.getElementById('updateInfoBtn').addEventListener('click', async () => {
-    if (!currentDrama) return;
-    const title  = document.getElementById('editTitle').value.trim()  || currentDrama.title;
-    const cover  = document.getElementById('editCover').value.trim()  || currentDrama.cover;
-    const status = document.getElementById('editStatus').value        || currentDrama.status;
-    showOverlay('Menyimpan info drama...');
-    try {
-        const r = await api('/api/admin/update-drama-info', { bookId: currentDrama.bookId, title, cover, status });
-        if (r.success) {
-            currentDrama.title = title; currentDrama.cover = cover; currentDrama.status = status;
-            detailThumb.src = cover; detailTitle.textContent = title;
-            toast('✅ Info drama disimpan.', 'success');
-        } else toast('❌ ' + r.error, 'error');
-    } catch(e) { toast('❌ ' + e.message, 'error'); }
-    hideOverlay();
-});
+async function updateInfo() {
+  const bookId = document.getElementById('inp-info-id').value.trim();
+  if (!bookId) { alert('Book ID wajib diisi!'); return; }
+  const body = { bookId };
+  const title  = document.getElementById('inp-info-title').value.trim();
+  const cover  = document.getElementById('inp-info-cover').value.trim();
+  const status = document.getElementById('inp-info-status').value.trim();
+  const tags   = document.getElementById('inp-info-tags').value.trim();
+  if (title)  body.title  = title;
+  if (cover)  body.cover  = cover;
+  if (status) body.status = status;
+  if (tags)   body.tags   = tags;
+
+  clearLog('info');
+  setBtn('info', true, 'Update...');
+  log('info', `Update info drama ${bookId}...`, 'info');
+  try {
+    const data = await callApi('/api/admin/update-drama-info', 'POST', body);
+    if (data.success) {
+      log('info', '✅ Info drama berhasil diperbarui.', 'ok');
+    } else {
+      log('info', `❌ Error: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    log('info', `❌ Gagal terhubung: ${e.message}`, 'err');
+  }
+  setBtn('info', false, '✏️ Update');
+}
 
 // ── Delete Drama ──────────────────────────────────────────────────────────────
-document.getElementById('deleteDramaBtn').addEventListener('click', async () => {
-    if (!currentDrama) return;
-    if (!confirm(`HAPUS drama "${currentDrama.title}" dari database?\nTindakan ini tidak bisa dibatalkan.`)) return;
-    showOverlay('Menghapus drama...');
-    try {
-        const r = await api('/api/admin/delete-drama', { bookId: currentDrama.bookId });
-        if (r.success) {
-            toast('✅ Drama dihapus.', 'success');
-            backBtn.click();
-            loadCatalog();
-        } else toast('❌ ' + r.error, 'error');
-    } catch(e) { toast('❌ ' + e.message, 'error'); }
-    hideOverlay();
-});
+async function deleteDrama() {
+  const bookId = document.getElementById('inp-del-id').value.trim();
+  if (!bookId) { alert('Book ID wajib diisi!'); return; }
+  if (!confirm(`⚠️ Yakin hapus drama ${bookId}?\nSemua episode juga akan dihapus. Tidak bisa dibatalkan!`)) return;
+  clearLog('del');
+  setBtn('del', true, 'Menghapus...');
+  log('del', `Menghapus drama ${bookId}...`, 'warn');
+  try {
+    const data = await callApi('/api/admin/delete-drama', 'POST', { bookId });
+    if (data.success) {
+      log('del', `✅ Drama ${bookId} berhasil dihapus.`, 'ok');
+      document.getElementById('inp-del-id').value = '';
+    } else {
+      log('del', `❌ Error: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    log('del', `❌ Gagal terhubung: ${e.message}`, 'err');
+  }
+  setBtn('del', false, '🗑️ Hapus');
+}
 </script>
-
-<!-- ── Loading Overlay ── -->
-<div class="overlay" id="overlay">
-    <div class="spinner"></div>
-    <div class="overlay-text" id="overlayText">Memproses...</div>
-</div>
-
-<!-- ── Login ── -->
-<div id="loginScreen">
-    <div style="font-size:2rem">🎬</div>
-    <h2>Admin Panel</h2>
-    <p>Pendi Drama Player</p>
-    <div class="login-box">
-        <label style="font-size:0.8rem;color:#8b949e">Password Admin</label>
-        <input type="password" id="loginPass" placeholder="Masukkan password..." autofocus>
-        <p id="loginErr" style="color:#ef4444;font-size:0.78rem;min-height:18px"></p>
-        <button class="btn btn-primary" id="loginBtn">Masuk</button>
-    </div>
-</div>
-
-<!-- ── Admin UI ── -->
-<div id="adminUI">
-    <header>
-        <button class="back-btn" id="backBtn">&#8592;</button>
-        <h1>Admin Panel</h1>
-        <span class="badge" id="headerBadge">0 Drama</span>
-    </header>
-
-    <!-- Catalog View -->
-    <div id="catalogView" style="padding:16px">
-        <!-- Stats -->
-        <div class="stat-row">
-            <div class="stat-card"><div class="num" id="statTotal">0</div><div class="lbl">Total Drama</div></div>
-            <div class="stat-card"><div class="num" id="statOngoing">0</div><div class="lbl">Ongoing</div></div>
-            <div class="stat-card"><div class="num" id="statLocked">0</div><div class="lbl">Ada Lock</div></div>
-        </div>
-
-        <!-- Quick Actions -->
-        <p class="section-title">Aksi Cepat</p>
-        <div class="action-row" style="margin-bottom:14px">
-            <div class="action-card" id="scrapeCatalogBtn">
-                <div class="icon">🔄</div>
-                <div class="label">Scrape Katalog</div>
-                <div class="sub">Update semua drama</div>
-            </div>
-            <div class="action-card" onclick="document.getElementById('addSection').scrollIntoView({behavior:'smooth'})">
-                <div class="icon">➕</div>
-                <div class="label">Tambah Drama</div>
-                <div class="sub">Masukkan Book ID</div>
-            </div>
-        </div>
-
-        <!-- Add Drama -->
-        <p class="section-title" id="addSection">Tambah Drama Baru</p>
-        <div class="add-form" style="margin-bottom:20px">
-            <input type="text" id="addDramaId" placeholder="Book ID (contoh: 42000011213)" style="flex:1;padding:9px 12px;background:#161b22;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:0.85rem">
-            <button class="btn btn-primary" id="addDramaBtn">Scrape</button>
-        </div>
-
-        <!-- Drama List -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <p class="section-title" style="margin:0">Daftar Drama</p>
-        </div>
-        <input type="search" id="catalogSearch" placeholder="Cari drama..." style="width:100%;padding:8px 12px;background:#161b22;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:0.83rem;margin-bottom:12px;outline:none">
-        <div id="dramaList"></div>
-    </div>
-
-    <!-- Drama Detail View -->
-    <div id="dramaDetailView" style="padding:16px">
-        <div class="detail-header">
-            <img class="detail-thumb" id="detailThumb" src="" onerror="this.style.background='#21262d';this.removeAttribute('src')">
-            <div class="detail-meta">
-                <h2 id="detailTitle">-</h2>
-                <p id="detailMeta" style="margin-top:6px"></p>
-            </div>
-        </div>
-
-        <!-- Edit Info -->
-        <p class="section-title">Edit Info Drama</p>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
-            <input type="text" id="editTitle" placeholder="Judul drama (kosongkan = tidak ubah)">
-            <input type="text" id="editCover" placeholder="URL cover (kosongkan = tidak ubah)">
-            <select id="editStatus" class="select">
-                <option value="">Status (kosongkan = tidak ubah)</option>
-                <option value="Ongoing">Ongoing</option>
-                <option value="Completed">Completed</option>
-            </select>
-            <button class="btn btn-secondary" id="updateInfoBtn">💾 Simpan Info</button>
-        </div>
-
-        <hr class="divider">
-
-        <!-- Episode Lock -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <p class="section-title" style="margin:0">Kelola Lock Episode <span id="detailEpCount" style="font-weight:400;color:#8b949e;font-size:0.72rem"></span></p>
-        </div>
-
-        <!-- Bulk actions -->
-        <div class="ep-controls">
-            <button class="btn btn-secondary" id="unlockAllBtn">🔓 Buka Semua</button>
-            <button class="btn btn-danger"    id="lockAllBtn">🔒 Kunci Semua</button>
-        </div>
-        <div class="lock-range" style="margin-bottom:12px">
-            <span>Kunci episode</span>
-            <input type="number" id="lockFrom" min="0" placeholder="dari" value="1">
-            <span>sampai</span>
-            <input type="number" id="lockTo"   min="0" placeholder="sampai">
-            <button class="btn btn-warning" id="lockRangeBtn">Terapkan</button>
-        </div>
-        <p style="font-size:0.72rem;color:#8b949e;margin-bottom:10px">Klik episode untuk toggle kunci/buka. Merah = terkunci, Hijau = terbuka.</p>
-        <div class="ep-grid-admin" id="detailEpGrid"></div>
-
-        <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">
-            <button class="btn btn-primary"   id="saveLockBtn">💾 Simpan Lock</button>
-            <button class="btn btn-warning"   id="refreshDramaBtn">🔄 Refresh Episode</button>
-            <button class="btn btn-danger"    id="deleteDramaBtn">🗑 Hapus Drama</button>
-        </div>
-    </div>
-</div>
-
-<div class="toast" id="toast"></div>
 </body>
 </html>
