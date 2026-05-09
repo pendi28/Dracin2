@@ -44,32 +44,29 @@ jobs:
         run: |
           echo '{"admin":{"key":"${{ secrets.ADMIN_KEY }}"}}' > functions/.runtimeconfig.json
 
-      - name: Write Service Account File
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
-
       - name: Deploy All
         if: ${{ github.event.inputs.target == 'all' }}
         run: firebase deploy --non-interactive
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Deploy Hosting Only
         if: ${{ github.event.inputs.target == 'hosting' }}
         run: firebase deploy --only hosting --non-interactive
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Deploy Functions Only
         if: ${{ github.event.inputs.target == 'functions' }}
         run: firebase deploy --only functions --non-interactive
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Deploy Firestore Only
         if: ${{ github.event.inputs.target == 'firestore' }}
         run: firebase deploy --only firestore --non-interactive
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Print Success
         run: echo "Deploy selesai [target=${{ github.event.inputs.target }}] — ${{ github.event.inputs.message }}"
