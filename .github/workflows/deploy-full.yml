@@ -31,6 +31,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install Firebase Tools
+        run: npm install -g firebase-tools
+
       - name: Install Functions Dependencies
         if: ${{ github.event.inputs.target == 'all' || github.event.inputs.target == 'functions' }}
         run: npm install
@@ -41,37 +44,32 @@ jobs:
         run: |
           echo '{"admin":{"key":"${{ secrets.ADMIN_KEY }}"}}' > functions/.runtimeconfig.json
 
+      - name: Write Service Account File
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
+
       - name: Deploy All
         if: ${{ github.event.inputs.target == 'all' }}
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --non-interactive
+        run: firebase deploy --non-interactive
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
 
       - name: Deploy Hosting Only
         if: ${{ github.event.inputs.target == 'hosting' }}
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only hosting --non-interactive
+        run: firebase deploy --only hosting --non-interactive
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
 
       - name: Deploy Functions Only
         if: ${{ github.event.inputs.target == 'functions' }}
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only functions --non-interactive
+        run: firebase deploy --only functions --non-interactive
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
 
       - name: Deploy Firestore Only
         if: ${{ github.event.inputs.target == 'firestore' }}
-        uses: w9jds/firebase-action@master
-        with:
-          args: deploy --only firestore --non-interactive
+        run: firebase deploy --only firestore --non-interactive
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
 
       - name: Print Success
         run: echo "Deploy selesai [target=${{ github.event.inputs.target }}] — ${{ github.event.inputs.message }}"
