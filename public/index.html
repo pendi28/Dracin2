@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pendi Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
@@ -55,8 +56,12 @@
 
         /* ── Player ── */
         #playerView { display: none; }
-        .player-wrap { background: #000; width: 100%; }
+        .player-wrap { background: #000; width: 100%; position: relative; }
         .player-wrap video { width: 100%; aspect-ratio: 16/9; display: block; background: #000; }
+        #videoLoading {
+            position: absolute; inset: 0; display: flex; align-items: center;
+            justify-content: center; background: rgba(0,0,0,0.5); display: none;
+        }
 
         .info-bar { padding: 12px 18px; border-bottom: 1px solid #21262d; }
         .drama-name  { font-size: 0.95rem; font-weight: 700; margin-bottom: 3px; }
@@ -102,22 +107,19 @@
 <body>
 
 <script type="module">
-import { initializeApp }         from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore,
-         collection, getDocs }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+         collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// ⚠️ GANTI DENGAN FIREBASE CONFIG KAMU
 const firebaseConfig = {
-    apiKey: "AIzaSyAbq9J5HDASVnqn13VwRAOd_u1MdEWj3bE",
-    authDomain: "drama-short-668af.firebaseapp.com",
-    projectId: "drama-short-668af",
-    storageBucket: "drama-short-668af.firebasestorage.app",
+    apiKey:            "AIzaSyAbq9J5HDASVnqn13VwRAOd_u1MdEWj3bE",
+    authDomain:        "drama-short-668af.firebaseapp.com",
+    projectId:         "drama-short-668af",
+    storageBucket:     "drama-short-668af.firebasestorage.app",
     messagingSenderId: "216564303270",
-    appId: "1:216564303270:web:13633390eb9543196a3b67"
+    appId:             "1:216564303270:web:13633390eb9543196a3b67"
 };
-
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+const db = getFirestore(initializeApp(firebaseConfig));
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 const browseView    = document.getElementById('browseView');
@@ -133,17 +135,67 @@ const headerTitle   = document.getElementById('headerTitle');
 const searchBar     = document.getElementById('searchBar');
 const toastEl       = document.getElementById('toast');
 const videoEl       = document.getElementById('mainPlayer');
+const videoLoading  = document.getElementById('videoLoading');
 
-let currentEp    = null;
-let activeBtn    = null;
+let currentEp  = null;
+let activeBtn  = null;
 let currentCover = '';
-let allDramas    = [];
+let allDramas  = [];
+let hlsInstance = null;
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
-function toast(msg, dur=2500) {
+function toast(msg, dur = 2500) {
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     setTimeout(() => toastEl.classList.remove('show'), dur);
+}
+
+// ── HLS Player ────────────────────────────────────────────────────────────────
+// Handles both native HLS (Safari) and hls.js (Chrome, Firefox, Android)
+function loadVideo(src, poster = '') {
+    // Destroy existing HLS instance
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+    videoEl.poster = poster;
+    videoLoading.style.display = 'flex';
+
+    const onReady = () => {
+        videoLoading.style.display = 'none';
+        videoEl.play().catch(() => {});
+    };
+
+    // Check if HLS.js is needed
+    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+        // Use HLS.js (Chrome, Firefox, Android)
+        hlsInstance = new Hls({
+            enableWorker: false,
+            lowLatencyMode: false,
+            maxBufferLength: 30,
+        });
+        hlsInstance.loadSource(src);
+        hlsInstance.attachMedia(videoEl);
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, onReady);
+        hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+                videoLoading.style.display = 'none';
+                toast('Gagal memuat video. Coba episode lain.');
+                console.error('HLS fatal error', data);
+            }
+        });
+    } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari / iOS)
+        videoEl.src = src;
+        videoEl.addEventListener('loadedmetadata', onReady, { once: true });
+    } else {
+        // Fallback: try to play directly (mp4)
+        videoEl.src = src;
+        videoEl.addEventListener('canplay', onReady, { once: true });
+    }
+
+    videoEl.onerror = () => {
+        videoLoading.style.display = 'none';
+        toast('Gagal memutar video. Coba pilih episode lain.');
+    };
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -154,6 +206,7 @@ function showBrowse() {
     qualitySelect.style.display = 'none';
     headerTitle.textContent  = 'Pendi Player';
     videoEl.pause();
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
     videoEl.src = '';
 }
 
@@ -167,9 +220,8 @@ function showPlayer(drama) {
     epCountEl.textContent    = '';
     currentCover = drama.cover || '';
     activeBtn = null;
+    qualitySelect.style.display = 'none';
     epGrid.innerHTML = `<div class="full-loading"><div class="spinner"></div><span class="loading-text">Mengambil episode...</span></div>`;
-
-    // [FIX] Gunakan API endpoint baru — tidak butuh data di Firestore
     loadEpisodes(drama.bookId, drama.lockedEpisodes || []);
 }
 
@@ -177,20 +229,21 @@ backBtn.addEventListener('click', showBrowse);
 
 // ── Play Episode ──────────────────────────────────────────────────────────────
 function playEpisode(ep, btn) {
-    if (!ep.rawUrl) { toast('Video tidak tersedia.'); return; }
+    if (!ep.rawUrl) { toast('Video tidak tersedia untuk episode ini.'); return; }
 
     currentEp = ep;
     if (activeBtn) activeBtn.classList.remove('active');
     activeBtn = btn;
     btn.classList.add('active');
 
-    // Isi quality selector
-    qualitySelect.innerHTML = '<option value="">Kualitas</option>';
-    if (ep.sources?.length > 0) {
-        ep.sources.sort((a,b) => b.quality - a.quality).forEach(s => {
+    // Build quality selector
+    qualitySelect.innerHTML = '';
+    if (ep.sources && ep.sources.length > 0) {
+        ep.sources.sort((a, b) => b.quality - a.quality).forEach(s => {
             const o = document.createElement('option');
-            o.value = `/api/decrypt?url=${encodeURIComponent(s.rawUrl)}`;
+            o.value       = `/api/decrypt?url=${encodeURIComponent(s.rawUrl)}`;
             o.textContent = s.quality + 'p';
+            o.dataset.raw = s.rawUrl;
             if (s.rawUrl === ep.rawUrl) o.selected = true;
             qualitySelect.appendChild(o);
         });
@@ -199,25 +252,22 @@ function playEpisode(ep, btn) {
         qualitySelect.style.display = 'none';
     }
 
-    videoEl.poster = ep.thumbnailUrl || currentCover || '';
-    videoEl.src    = `/api/decrypt?url=${encodeURIComponent(ep.rawUrl)}`;
-    videoEl.play().catch(() => {});
+    const src = `/api/decrypt?url=${encodeURIComponent(ep.rawUrl)}`;
+    loadVideo(src, ep.thumbnailUrl || currentCover || '');
     nowPlaying.textContent = '▶ ' + ep.title;
     document.querySelector('.player-wrap').scrollIntoView({ behavior: 'smooth' });
 }
 
+// Quality change
 qualitySelect.addEventListener('change', () => {
-    if (!qualitySelect.value || !currentEp) return;
-    const t = videoEl.currentTime, wasPlaying = !videoEl.paused;
-    videoEl.src = qualitySelect.value;
-    videoEl.addEventListener('loadedmetadata', function onMeta() {
-        videoEl.currentTime = t;
-        if (wasPlaying) videoEl.play().catch(()=>{});
-        videoEl.removeEventListener('loadedmetadata', onMeta);
-    });
+    if (!qualitySelect.value) return;
+    const t = videoEl.currentTime;
+    loadVideo(qualitySelect.value, videoEl.poster);
+    // Restore position after load
+    videoEl.addEventListener('canplay', () => { videoEl.currentTime = t; }, { once: true });
 });
 
-// ── [FIX] Load Episodes via API (bukan Firestore) ────────────────────────────
+// ── Load Episodes ─────────────────────────────────────────────────────────────
 async function loadEpisodes(bookId, lockedEpisodes) {
     try {
         const resp = await fetch(`/api/episodes/${bookId}`);
@@ -230,34 +280,45 @@ async function loadEpisodes(bookId, lockedEpisodes) {
 
         const chapters = await resp.json();
         if (!chapters.length) {
-            epGrid.innerHTML = `<div class="status-msg">Tidak ada episode.</div>`;
+            epGrid.innerHTML = `<div class="status-msg">Tidak ada episode tersedia.</div>`;
+            nowPlaying.textContent = 'Tidak ada episode.';
             return;
         }
 
-        const lockedSet = new Set(lockedEpisodes.map(Number));
+        const lockedSet = new Set((lockedEpisodes || []).map(Number));
         epCountEl.textContent = chapters.length + ' Episode';
         epGrid.innerHTML = '';
         activeBtn = null;
 
+        let firstUnlockedBtn = null;
         chapters.forEach((ep, i) => {
             const btn      = document.createElement('button');
             const isLocked = lockedSet.has(Number(ep.chapterIndex));
             btn.className  = 'ep-btn' + (isLocked ? ' locked' : '');
-            btn.textContent = ep.title || String(ep.chapterIndex);
+            btn.textContent = ep.chapterIndex || (i + 1);
+            btn.title       = ep.title || `Episode ${ep.chapterIndex}`;
             if (isLocked) {
-                btn.title = 'Episode terkunci';
-                btn.addEventListener('click', () => toast('Episode ini terkunci.'));
+                btn.addEventListener('click', () => toast('Episode ini terkunci. 🔒'));
             } else {
                 btn.addEventListener('click', () => playEpisode(ep, btn));
+                if (!firstUnlockedBtn) firstUnlockedBtn = { ep, btn };
             }
             epGrid.appendChild(btn);
-            // Auto-play episode pertama yang tidak terkunci
-            if (i === 0 && !isLocked) setTimeout(() => btn.click(), 300);
         });
 
-        nowPlaying.textContent = 'Pilih episode untuk mulai...';
-    } catch(err) {
+        // Auto-play episode pertama yang tidak terkunci
+        if (firstUnlockedBtn) {
+            nowPlaying.textContent = 'Pilih episode untuk mulai...';
+            setTimeout(() => {
+                firstUnlockedBtn.btn.click();
+            }, 400);
+        } else {
+            nowPlaying.textContent = 'Semua episode terkunci.';
+        }
+
+    } catch (err) {
         epGrid.innerHTML = `<div class="status-msg">Error: ${err.message}</div>`;
+        nowPlaying.textContent = 'Terjadi kesalahan.';
     }
 }
 
@@ -265,18 +326,18 @@ async function loadEpisodes(bookId, lockedEpisodes) {
 async function loadCatalog() {
     try {
         const snap = await getDocs(collection(db, 'dramas'));
-        allDramas  = [];
+        allDramas = [];
         snap.forEach(d => allDramas.push(d.data()));
-        allDramas.sort((a,b) => (a.title||'').localeCompare(b.title||''));
+        allDramas.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
         renderCatalog(allDramas);
-    } catch(err) {
-        dramaGrid.innerHTML = `<div class="status-msg" style="grid-column:1/-1">Gagal memuat katalog: ${err.message}</div>`;
+    } catch (err) {
+        dramaGrid.innerHTML = `<div class="status-msg" style="grid-column:1/-1">Gagal memuat katalog Firestore: ${err.message}</div>`;
     }
 }
 
 function renderCatalog(list) {
     if (!list.length) {
-        dramaGrid.innerHTML = `<div class="status-msg" style="grid-column:1/-1">Belum ada drama. Gunakan Admin Panel untuk scrape katalog.</div>`;
+        dramaGrid.innerHTML = `<div class="status-msg" style="grid-column:1/-1">Belum ada drama. Gunakan <a href="/admin.html" style="color:#2dd4bf">Admin Panel</a> untuk scrape katalog.</div>`;
         return;
     }
     dramaGrid.innerHTML = '';
@@ -284,22 +345,21 @@ function renderCatalog(list) {
         const card = document.createElement('div');
         card.className = 'drama-card';
         card.innerHTML = `
-            <img src="${drama.cover}" alt="${drama.title}" loading="lazy"
+            <img src="${drama.cover || ''}" alt="${drama.title || ''}" loading="lazy"
                  onerror="this.style.display='none'">
             <div class="card-info">
                 <span class="card-status ${drama.status === 'Ongoing' ? 'ongoing' : 'completed'}">${drama.status || ''}</span>
-                <div class="card-title">${drama.title}</div>
-                <div class="card-meta">${drama.totalEps ? drama.totalEps+' ep' : ''}${drama.tags ? ' · '+drama.tags.split(',')[0] : ''}</div>
+                <div class="card-title">${drama.title || 'Tanpa Judul'}</div>
+                <div class="card-meta">${drama.totalEps ? drama.totalEps + ' ep' : ''}${drama.tags ? ' · ' + drama.tags.split(',')[0] : ''}</div>
             </div>`;
         card.addEventListener('click', () => showPlayer(drama));
         dramaGrid.appendChild(card);
     });
 }
 
-// Pencarian
 searchBar.addEventListener('input', () => {
     const q = searchBar.value.toLowerCase().trim();
-    renderCatalog(q ? allDramas.filter(d => (d.title||'').toLowerCase().includes(q)) : allDramas);
+    renderCatalog(q ? allDramas.filter(d => (d.title || '').toLowerCase().includes(q)) : allDramas);
 });
 
 loadCatalog();
@@ -308,7 +368,7 @@ loadCatalog();
 <header>
     <button class="back-btn" id="backBtn">&#8592;</button>
     <h1 id="headerTitle">Pendi Player</h1>
-    <select class="quality-select" id="qualitySelect"><option value="">Kualitas</option></select>
+    <select class="quality-select" id="qualitySelect"></select>
 </header>
 
 <!-- Browse -->
@@ -318,7 +378,10 @@ loadCatalog();
         <p class="browse-title">Daftar Drama</p>
     </div>
     <div class="drama-grid" id="dramaGrid" style="padding:0 16px 20px">
-        <div class="full-loading"><div class="spinner"></div><span class="loading-text">Memuat dari database...</span></div>
+        <div class="full-loading">
+            <div class="spinner"></div>
+            <span class="loading-text">Memuat dari database...</span>
+        </div>
     </div>
 </div>
 
@@ -326,6 +389,7 @@ loadCatalog();
 <div id="playerView">
     <div class="player-wrap">
         <video id="mainPlayer" playsinline controls></video>
+        <div id="videoLoading"><div class="spinner"></div></div>
     </div>
     <div class="info-bar">
         <div class="drama-name" id="dramaName">-</div>
