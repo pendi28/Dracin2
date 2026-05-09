@@ -311,6 +311,61 @@ app.get('/api/episodes/:bookId', async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── [BARU] POST /api/admin/scrape-all-episodes ───────────────────────────────
+// Scrape episode SEMUA drama sekaligus dan simpan ke Firestore.
+// Kirim progress real-time via Server-Sent Events (SSE).
+// Body: { bookIds: ["123","456",...] } — kalau tidak dikirim, ambil semua dari Firestore.
+app.post('/api/admin/scrape-all-episodes', async (req, res) => {
+    if (!checkAdmin(req, res)) return;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    try {
+        const ok = await ensureToken();
+        if (!ok) { send({ type: 'error', error: 'Gagal inisialisasi token.' }); return res.end(); }
+
+        // Ambil daftar bookId — dari body atau dari Firestore
+        let bookIds = req.body?.bookIds;
+        if (!Array.isArray(bookIds) || !bookIds.length) {
+            const snap = await db.collection('dramas').get();
+            bookIds = snap.docs.map(d => d.id);
+        }
+
+        send({ type: 'start', total: bookIds.length });
+
+        let done = 0, failed = 0;
+        for (const bookId of bookIds) {
+            try {
+                const episodes = await scrapeEpisodes(bookId);
+                if (episodes.length) {
+                    // Simpan ke Firestore
+                    const dramaSnap = await db.collection('dramas').doc(String(bookId)).get();
+                    const dramaData = dramaSnap.exists ? dramaSnap.data() : { bookId: String(bookId) };
+                    await saveDramaToFirestore(bookId, {
+                        ...dramaData, bookId: String(bookId),
+                        totalEps: episodes.length,
+                        lastScraped: admin.firestore.FieldValue.serverTimestamp()
+                    }, episodes);
+                }
+                done++;
+                send({ type: 'progress', bookId, episodeCount: episodes.length, done, total: bookIds.length, status: 'ok' });
+            } catch(e) {
+                failed++; done++;
+                send({ type: 'progress', bookId, episodeCount: 0, done, total: bookIds.length, status: 'error', error: e.message });
+            }
+        }
+        send({ type: 'done', total: bookIds.length, failed });
+    } catch(e) {
+        send({ type: 'error', error: e.message });
+    }
+    res.end();
+});
+
 // ── GET /api/decrypt?url= ─────────────────────────────────────────────────────
 app.get('/api/decrypt', (req, res) => {
     const url = req.query.url;
