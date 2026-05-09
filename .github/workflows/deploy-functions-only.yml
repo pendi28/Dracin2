@@ -1,7 +1,5 @@
 name: OTA Update — Functions Only
 
-# Jalankan secara manual dari tab GitHub Actions
-# Cocok untuk update logic API/scraper tanpa menyentuh tampilan
 on:
   workflow_dispatch:
     inputs:
@@ -27,12 +25,9 @@ jobs:
         run: npm install
         working-directory: functions
 
-      - name: Set Firebase Functions Config
-        uses: w9jds/firebase-action@master
-        with:
-          args: functions:config:set admin.key="${{ secrets.ADMIN_KEY }}"
-        env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - name: Write Firebase Runtime Config
+        run: |
+          echo '{"admin":{"key":"${{ secrets.ADMIN_KEY }}"}}' > functions/.runtimeconfig.json
 
       - name: Deploy Functions Only
         uses: w9jds/firebase-action@master
