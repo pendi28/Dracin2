@@ -1,7 +1,5 @@
 name: OTA Update — Full Deploy (Manual)
 
-# Deploy manual lengkap: Hosting + Functions + Firestore rules
-# Gunakan ini jika ingin deploy semua sekaligus tanpa push ke main
 on:
   workflow_dispatch:
     inputs:
@@ -38,13 +36,10 @@ jobs:
         run: npm install
         working-directory: functions
 
-      - name: Set Firebase Functions Config
+      - name: Write Firebase Runtime Config
         if: ${{ github.event.inputs.target == 'all' || github.event.inputs.target == 'functions' }}
-        uses: w9jds/firebase-action@master
-        with:
-          args: functions:config:set admin.key="${{ secrets.ADMIN_KEY }}"
-        env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo '{"admin":{"key":"${{ secrets.ADMIN_KEY }}"}}' > functions/.runtimeconfig.json
 
       - name: Deploy All
         if: ${{ github.event.inputs.target == 'all' }}
