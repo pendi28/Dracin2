@@ -1,0 +1,82 @@
+name: OTA Update — Full Deploy (Manual)
+
+# Deploy manual lengkap: Hosting + Functions + Firestore rules
+# Gunakan ini jika ingin deploy semua sekaligus tanpa push ke main
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Pilih apa yang di-deploy"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - hosting
+          - functions
+          - firestore
+      message:
+        description: "Catatan update (opsional)"
+        required: false
+        default: "Manual full deploy"
+
+jobs:
+  deploy-full:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Functions Dependencies
+        if: ${{ github.event.inputs.target == 'all' || github.event.inputs.target == 'functions' }}
+        run: npm install
+        working-directory: functions
+
+      - name: Set Firebase Functions Config
+        if: ${{ github.event.inputs.target == 'all' || github.event.inputs.target == 'functions' }}
+        uses: w9jds/firebase-action@master
+        with:
+          args: functions:config:set admin.key="${{ secrets.ADMIN_KEY }}"
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy All
+        if: ${{ github.event.inputs.target == 'all' }}
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --non-interactive
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Hosting Only
+        if: ${{ github.event.inputs.target == 'hosting' }}
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting --non-interactive
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Functions Only
+        if: ${{ github.event.inputs.target == 'functions' }}
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only functions --non-interactive
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Firestore Only
+        if: ${{ github.event.inputs.target == 'firestore' }}
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only firestore --non-interactive
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Print Success
+        run: echo "Deploy selesai [target=${{ github.event.inputs.target }}] — ${{ github.event.inputs.message }}"

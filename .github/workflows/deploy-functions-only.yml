@@ -1,0 +1,45 @@
+name: OTA Update — Functions Only
+
+# Jalankan secara manual dari tab GitHub Actions
+# Cocok untuk update logic API/scraper tanpa menyentuh tampilan
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Catatan update (opsional)"
+        required: false
+        default: "Update Cloud Functions"
+
+jobs:
+  deploy-functions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Functions Dependencies
+        run: npm install
+        working-directory: functions
+
+      - name: Set Firebase Functions Config
+        uses: w9jds/firebase-action@master
+        with:
+          args: functions:config:set admin.key="${{ secrets.ADMIN_KEY }}"
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Functions Only
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only functions --non-interactive
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Print Success
+        run: echo "Functions update selesai — ${{ github.event.inputs.message }}"

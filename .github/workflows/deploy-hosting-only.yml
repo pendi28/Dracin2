@@ -1,0 +1,29 @@
+name: OTA Update — Hosting Only
+
+# Jalankan secara manual dari tab GitHub Actions
+# Cocok untuk update file HTML/CSS/JS tanpa perlu redeploy Cloud Functions
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Catatan update (opsional)"
+        required: false
+        default: "OTA update"
+
+jobs:
+  deploy-hosting:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy Hosting Only
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting --non-interactive
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Print Success
+        run: echo "OTA update selesai — ${{ github.event.inputs.message }}"
