@@ -1,5 +1,5 @@
 /**
- * Firebase Cloud Functions — Pendi Drama Player
+ * Pendi Drama Player — API (Vercel)
  * Routes:
  *   GET  /api/decrypt?url=          → proxy decrypt video
  *   POST /api/admin/scrape-catalog  → scrape + simpan katalog ke Firestore
@@ -9,17 +9,22 @@
  *   POST /api/admin/lock-episodes   → set episode mana yg terkunci per drama
  */
 
-const functions = require('firebase-functions');
-const admin     = require('firebase-admin');
-const express   = require('express');
-const cors      = require('cors');
-const https     = require('https');
-const tls       = require('tls');
-const crypto    = require('crypto');
-const zlib      = require('zlib');
-const axios     = require('axios');
+const admin   = require('firebase-admin');
+const express = require('express');
+const cors    = require('cors');
+const https   = require('https');
+const tls     = require('tls');
+const crypto  = require('crypto');
+const zlib    = require('zlib');
+const axios   = require('axios');
 
-admin.initializeApp();
+// ─── Firebase Admin Init ──────────────────────────────────────────────────────
+if (!admin.apps.length) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}');
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+}
 const db = admin.firestore();
 
 const app = express();
@@ -27,9 +32,8 @@ app.use(cors({ origin: true }));
 app.use(express.json());
 
 // ─── Admin Key ────────────────────────────────────────────────────────────────
-// Set via: firebase functions:config:set admin.key="PASSWORD_KAMU"
 function getAdminKey() {
-    return (functions.config().admin && functions.config().admin.key) || 'admin123';
+    return process.env.ADMIN_KEY || 'admin123';
 }
 
 function checkAdmin(req, res) {
@@ -184,7 +188,7 @@ async function apiPost(endpoint, body) {
     return r.ok && r.data?.data ? { ok: true, data: r.data.data } : { ok: false, err: r.err || 'No data' };
 }
 
-// ─── Scrape Drama Catalog ─────────────────────────────────────────────────────
+// ─── Scrape Catalog ───────────────────────────────────────────────────────────
 async function scrapeCatalog() {
     let page = 1, all = [];
     while (true) {
@@ -246,7 +250,6 @@ async function scrapeEpisodes(bookId) {
     if (!all.length) return [];
     all.sort((a,b) => a.chapterIndex - b.chapterIndex);
 
-    // Simpan rawUrl (terenkripsi) — BUKAN proxy URL, supaya tidak perlu re-scrape jika domain berubah
     return all.map((ep, i) => {
         const cdn  = ep.cdnList ? (ep.cdnList.find(c => c.isDefault===1) || ep.cdnList[0]) : null;
         const vids = cdn?.videoPathList || [];
@@ -269,12 +272,8 @@ async function scrapeEpisodes(bookId) {
 // ─── Simpan ke Firestore ──────────────────────────────────────────────────────
 async function saveDramaToFirestore(bookId, dramaData, episodes) {
     const batch = db.batch();
-
-    // Simpan drama metadata
     const dramaRef = db.collection('dramas').doc(String(bookId));
     batch.set(dramaRef, dramaData, { merge: true });
-
-    // Simpan episodes
     const epRef = db.collection('episodes').doc(String(bookId));
     batch.set(epRef, {
         bookId:      String(bookId),
@@ -282,13 +281,11 @@ async function saveDramaToFirestore(bookId, dramaData, episodes) {
         totalEps:    episodes.length,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
     });
-
     await batch.commit();
 }
 
 // ─── Routes: Public ───────────────────────────────────────────────────────────
 
-// GET /api/decrypt?url=<encrypted>
 app.get('/api/decrypt', (req, res) => {
     const url = req.query.url;
     if (!url) return res.status(400).json({ error: 'Missing url' });
@@ -313,102 +310,68 @@ app.get('/api/decrypt', (req, res) => {
 
 // ─── Routes: Admin ────────────────────────────────────────────────────────────
 
-// POST /api/admin/scrape-catalog
-// Body: { adminKey: "..." }
 app.post('/api/admin/scrape-catalog', async (req, res) => {
     if (!checkAdmin(req, res)) return;
     try {
         const ok = await ensureToken();
         if (!ok) return res.status(502).json({ error: 'Gagal inisialisasi token.' });
-
         const catalog = await scrapeCatalog();
         if (!catalog.length) return res.status(502).json({ error: 'Katalog kosong.' });
-
-        // Simpan setiap drama ke Firestore
         const batch = db.batch();
         catalog.forEach(d => {
             const ref = db.collection('dramas').doc(d.bookId);
             batch.set(ref, d, { merge: true });
         });
         await batch.commit();
-
-        res.json({ success: true, total: catalog.length, message: `${catalog.length} drama disimpan ke Firestore.` });
-    } catch(e) {
-        res.status(500).json({ error: e.message });
-    }
+        res.json({ success: true, total: catalog.length, message: `${catalog.length} drama disimpan.` });
+    } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/scrape-drama
-// Body: { adminKey: "...", bookId: "..." }
 app.post('/api/admin/scrape-drama', async (req, res) => {
     if (!checkAdmin(req, res)) return;
     const { bookId } = req.body;
     if (!bookId) return res.status(400).json({ error: 'bookId wajib diisi.' });
-
     try {
         const ok = await ensureToken();
         if (!ok) return res.status(502).json({ error: 'Gagal inisialisasi token.' });
-
-        // Ambil info drama dari Firestore (atau buat baru)
         const dramaSnap = await db.collection('dramas').doc(String(bookId)).get();
         const dramaData = dramaSnap.exists ? dramaSnap.data() : {
             bookId: String(bookId), title: `Drama ${bookId}`,
-            cover: '', totalEps: 0, status: 'Unknown', tags: '',
-            lockedEpisodes: []
+            cover: '', totalEps: 0, status: 'Unknown', tags: '', lockedEpisodes: []
         };
-
         const episodes = await scrapeEpisodes(bookId);
         if (!episodes.length) return res.status(502).json({ error: 'Tidak ada episode ditemukan.' });
-
         dramaData.totalEps    = episodes.length;
         dramaData.lastScraped = admin.firestore.FieldValue.serverTimestamp();
-
         await saveDramaToFirestore(bookId, dramaData, episodes);
         res.json({ success: true, total: episodes.length, message: `${episodes.length} episode disimpan.` });
-    } catch(e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/refresh-drama
-// Body: { adminKey: "...", bookId: "..." }
 app.post('/api/admin/refresh-drama', async (req, res) => {
     if (!checkAdmin(req, res)) return;
     const { bookId } = req.body;
     if (!bookId) return res.status(400).json({ error: 'bookId wajib diisi.' });
-
     try {
         const ok = await ensureToken();
         if (!ok) return res.status(502).json({ error: 'Gagal inisialisasi token.' });
-
         const episodes = await scrapeEpisodes(bookId);
         if (!episodes.length) return res.status(502).json({ error: 'Tidak ada episode ditemukan.' });
-
-        // Pertahankan lockedEpisodes yang sudah ada
         const dramaSnap = await db.collection('dramas').doc(String(bookId)).get();
         const existing  = dramaSnap.exists ? dramaSnap.data() : {};
-
         await saveDramaToFirestore(bookId, {
-            ...existing,
-            bookId:      String(bookId),
-            totalEps:    episodes.length,
+            ...existing, bookId: String(bookId),
+            totalEps: episodes.length,
             lastScraped: admin.firestore.FieldValue.serverTimestamp()
         }, episodes);
-
         res.json({ success: true, total: episodes.length });
-    } catch(e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/lock-episodes
-// Body: { adminKey: "...", bookId: "...", lockedEpisodes: [1, 2, 3] }
-// lockedEpisodes adalah array chapterIndex yang DIKUNCI
 app.post('/api/admin/lock-episodes', async (req, res) => {
     if (!checkAdmin(req, res)) return;
     const { bookId, lockedEpisodes } = req.body;
     if (!bookId) return res.status(400).json({ error: 'bookId wajib diisi.' });
-
     try {
         const locked = Array.isArray(lockedEpisodes) ? lockedEpisodes.map(Number) : [];
         await db.collection('dramas').doc(String(bookId)).update({
@@ -416,57 +379,40 @@ app.post('/api/admin/lock-episodes', async (req, res) => {
             lastModified: admin.firestore.FieldValue.serverTimestamp()
         });
         res.json({ success: true, bookId, lockedEpisodes: locked });
-    } catch(e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/delete-drama
-// Body: { adminKey: "...", bookId: "..." }
 app.post('/api/admin/delete-drama', async (req, res) => {
     if (!checkAdmin(req, res)) return;
     const { bookId } = req.body;
     if (!bookId) return res.status(400).json({ error: 'bookId wajib diisi.' });
-
     try {
         const batch = db.batch();
         batch.delete(db.collection('dramas').doc(String(bookId)));
         batch.delete(db.collection('episodes').doc(String(bookId)));
         await batch.commit();
         res.json({ success: true, message: `Drama ${bookId} dihapus.` });
-    } catch(e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/update-drama-info
-// Body: { adminKey: "...", bookId: "...", title, cover, status, tags }
 app.post('/api/admin/update-drama-info', async (req, res) => {
     if (!checkAdmin(req, res)) return;
     const { bookId, title, cover, status, tags } = req.body;
     if (!bookId) return res.status(400).json({ error: 'bookId wajib diisi.' });
-
     try {
         const update = { lastModified: admin.firestore.FieldValue.serverTimestamp() };
         if (title  !== undefined) update.title  = title;
         if (cover  !== undefined) update.cover  = cover;
         if (status !== undefined) update.status = status;
         if (tags   !== undefined) update.tags   = tags;
-
         await db.collection('dramas').doc(String(bookId)).update(update);
         res.json({ success: true });
-    } catch(e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/admin/verify
-// Cek apakah admin key valid
 app.post('/api/admin/verify', (req, res) => {
     if (!checkAdmin(req, res)) return;
     res.json({ success: true, message: 'Admin key valid.' });
 });
 
-exports.api = functions
-    .runWith({ timeoutSeconds: 540, memory: '512MB' })
-    .https.onRequest(app);
+module.exports = app;
