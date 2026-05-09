@@ -1,12 +1,20 @@
 /**
- * Pendi Drama Player — API (Vercel)
- * Routes:
+ * Pendi Drama Player — API (Firebase Functions / Vercel)
+ * 
+ * PERBAIKAN UTAMA:
+ *   GET  /api/episodes/:bookId  → scrape episode langsung (tanpa simpan ke Firestore)
+ *                                  FIX: player tidak lagi blank walau episode belum di-scrape
+ *
+ * Routes lengkap:
  *   GET  /api/decrypt?url=          → proxy decrypt video
+ *   GET  /api/episodes/:bookId      → ambil episode langsung dari DramaBox (BARU)
  *   POST /api/admin/scrape-catalog  → scrape + simpan katalog ke Firestore
  *   POST /api/admin/scrape-drama    → scrape + simpan episode drama ke Firestore
  *   POST /api/admin/refresh-drama   → re-scrape episode (update Firestore)
  *   POST /api/admin/delete-drama    → hapus drama dari Firestore
  *   POST /api/admin/lock-episodes   → set episode mana yg terkunci per drama
+ *   POST /api/admin/update-drama-info → update info drama (title, cover, dll)
+ *   POST /api/admin/verify          → cek admin key
  */
 
 const admin   = require('firebase-admin');
@@ -21,9 +29,7 @@ const axios   = require('axios');
 // ─── Firebase Admin Init ──────────────────────────────────────────────────────
 if (!admin.apps.length) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}');
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-    });
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 }
 const db = admin.firestore();
 
@@ -32,16 +38,11 @@ app.use(cors({ origin: true }));
 app.use(express.json());
 
 // ─── Admin Key ────────────────────────────────────────────────────────────────
-function getAdminKey() {
-    return process.env.ADMIN_KEY || 'admin123';
-}
+function getAdminKey() { return process.env.ADMIN_KEY || 'admin123'; }
 
 function checkAdmin(req, res) {
     const key = req.headers['x-admin-key'] || req.body?.adminKey || req.query.adminKey;
-    if (key !== getAdminKey()) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return false;
-    }
+    if (key !== getAdminKey()) { res.status(401).json({ error: 'Unauthorized' }); return false; }
     return true;
 }
 
@@ -73,10 +74,8 @@ async function ensureToken() {
         const r = await axios.get(`${API_BASE}/generate-token`, { timeout: TIMEOUT_MS });
         if (r.data?.status && r.data?.data) {
             Object.assign(session, {
-                token: r.data.data.sn,
-                deviceid: r.data.data.device_id,
-                androidid: r.data.data.android_id,
-                cookies: [], ready: true
+                token: r.data.data.sn, deviceid: r.data.data.device_id,
+                androidid: r.data.data.android_id, cookies: [], ready: true
             });
             return true;
         }
@@ -203,12 +202,12 @@ async function scrapeCatalog() {
         } else break;
     }
     return all.map(d => ({
-        bookId:      String(d.bookId),
-        title:       d.bookName || d.name || 'Unknown',
-        cover:       d.cover || d.coverWap || '',
-        totalEps:    d.chapterCount || d.totalChapter || 0,
-        status:      d.serialStatus === 1 ? 'Ongoing' : 'Completed',
-        tags:        (d.labelList || []).map(l => l.name).join(', '),
+        bookId:   String(d.bookId),
+        title:    d.bookName || d.name || 'Unknown',
+        cover:    d.cover || d.coverWap || '',
+        totalEps: d.chapterCount || d.totalChapter || 0,
+        status:   d.serialStatus === 1 ? 'Ongoing' : 'Completed',
+        tags:     (d.labelList || []).map(l => l.name).join(', '),
         lockedEpisodes: [],
         lastScraped: admin.firestore.FieldValue.serverTimestamp()
     }));
@@ -260,10 +259,7 @@ async function scrapeEpisodes(bookId) {
             chapterId:    ep.chapterId,
             rawUrl:       main?.videoPath || '',
             quality:      main?.quality   || 0,
-            sources:      vids.filter(v => v.videoPath).map(v => ({
-                quality: v.quality,
-                rawUrl:  v.videoPath
-            })),
+            sources:      vids.filter(v => v.videoPath).map(v => ({ quality: v.quality, rawUrl: v.videoPath })),
             thumbnailUrl: ep.chapterImg || ep.spriteSnapshotUrl || ''
         };
     });
@@ -271,7 +267,7 @@ async function scrapeEpisodes(bookId) {
 
 // ─── Simpan ke Firestore ──────────────────────────────────────────────────────
 async function saveDramaToFirestore(bookId, dramaData, episodes) {
-    const batch = db.batch();
+    const batch    = db.batch();
     const dramaRef = db.collection('dramas').doc(String(bookId));
     batch.set(dramaRef, dramaData, { merge: true });
     const epRef = db.collection('episodes').doc(String(bookId));
@@ -284,8 +280,38 @@ async function saveDramaToFirestore(bookId, dramaData, episodes) {
     await batch.commit();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
 // ─── Routes: Public ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 
+// ── [BARU] GET /api/episodes/:bookId ─────────────────────────────────────────
+// Scrape episode langsung dari DramaBox tanpa butuh data di Firestore.
+// Ini yang memperbaiki bug player blank screen.
+app.get('/api/episodes/:bookId', async (req, res) => {
+    const { bookId } = req.params;
+    if (!bookId) return res.status(400).json({ error: 'bookId wajib diisi.' });
+    try {
+        const ok = await ensureToken();
+        if (!ok) return res.status(502).json({ error: 'Gagal inisialisasi token.' });
+
+        // Cek cache Firestore dulu (opsional, lebih cepat)
+        const snap = await db.collection('episodes').doc(String(bookId)).get();
+        if (snap.exists) {
+            const data = snap.data();
+            const chapters = data.chapters || [];
+            if (chapters.length > 0) {
+                return res.json(chapters);
+            }
+        }
+
+        // Kalau tidak ada di cache, scrape langsung
+        const episodes = await scrapeEpisodes(bookId);
+        if (!episodes.length) return res.status(404).json({ error: 'Tidak ada episode ditemukan.' });
+        res.json(episodes);
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/decrypt?url= ─────────────────────────────────────────────────────
 app.get('/api/decrypt', (req, res) => {
     const url = req.query.url;
     if (!url) return res.status(400).json({ error: 'Missing url' });
@@ -308,7 +334,9 @@ app.get('/api/decrypt', (req, res) => {
     req.on('close', () => req2.destroy());
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
 // ─── Routes: Admin ────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
 
 app.post('/api/admin/scrape-catalog', async (req, res) => {
     if (!checkAdmin(req, res)) return;
