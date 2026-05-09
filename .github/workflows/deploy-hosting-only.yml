@@ -19,13 +19,10 @@ jobs:
       - name: Install Firebase Tools
         run: npm install -g firebase-tools
 
-      - name: Write Service Account File
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
-
       - name: Deploy Hosting Only
         run: firebase deploy --only hosting --non-interactive
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Print Success
         run: echo "OTA update selesai — ${{ github.event.inputs.message }}"
