@@ -5,7 +5,7 @@
     "rewrites": [
       {
         "source": "/api/**",
-        "destination": "https://dracin2-woad.vercel.app//api/**"
+        "destination": "https://dracin2-neon.vercel.app///api/**"
       }
     ]
   },
