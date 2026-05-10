@@ -1,15 +1,15 @@
 /**
  * Pendi Drama Player — API (Vercel)
- * GET  /api/decrypt?url=   → Proxy video stream dari decrypt service
- * GET  /api/test-stream    → Test apakah proxy berfungsi
- * GET  /api/episodes/:id   → Ambil episode dari Firestore
- * POST /api/admin/*        → Fungsi admin (scrape, manage data)
+ *
+ * GET  /api/health             → Cek status API
+ * GET  /api/decrypt?url=       → Proxy stream video (FALLBACK jika direct gagal)
+ * GET  /api/episodes/:bookId   → Ambil episode dari Firestore
+ * POST /api/admin/*            → Fungsi admin
  */
 
 const admin   = require('firebase-admin');
 const express = require('express');
 const cors    = require('cors');
-const https   = require('https');
 const tls     = require('tls');
 const crypto  = require('crypto');
 const zlib    = require('zlib');
@@ -24,22 +24,19 @@ const db = admin.firestore();
 
 const app = express();
 
-// ─── CORS Global ──────────────────────────────────────────────────────────────
-app.use(cors({
-    origin: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
+// ─── CORS ──────────────────────────────────────────────────────────────────────
+const corsOptions = {
+    origin:         true,
+    methods:        ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'x-admin-key', 'Range', 'Authorization'],
     exposedHeaders: ['Content-Range', 'Content-Length', 'Accept-Ranges']
-}));
-
-// Tangani semua OPTIONS preflight secara eksplisit
-app.options('*', cors());
-
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // ─── Admin Key ────────────────────────────────────────────────────────────────
 function getAdminKey() { return process.env.ADMIN_KEY || 'admin123'; }
-
 function checkAdmin(req, res) {
     const key = req.headers['x-admin-key'] || req.body?.adminKey || req.query.adminKey;
     if (key !== getAdminKey()) { res.status(401).json({ error: 'Unauthorized' }); return false; }
@@ -216,7 +213,6 @@ async function scrapeCatalog() {
 // ─── Scrape Episodes ──────────────────────────────────────────────────────────
 async function scrapeEpisodes(bookId) {
     let all = [], cursor = -1, retries = 0;
-
     while (true) {
         const r = await apiPost('https://sapi.dramaboxvideo.com/drama-box/chapterv2/batch/load', {
             boundaryIndex:0, index: parseInt(cursor),
@@ -227,9 +223,7 @@ async function scrapeEpisodes(bookId) {
             startUpKey: crypto.randomUUID(),
             bookId: String(bookId)
         });
-
         const isEmpty = r.ok && !r.data?.chapterList?.length;
-
         if (!r.ok || isEmpty) {
             retries++;
             if (retries >= MAX_RETRY) break;
@@ -237,18 +231,14 @@ async function scrapeEpisodes(bookId) {
             if (cursor !== -1) cursor += 5;
             continue;
         }
-
         retries = 0;
         const fresh = r.data.chapterList.filter(n => !all.some(e => e.chapterId === n.chapterId));
         if (!fresh.length) { cursor += 5; retries++; continue; }
-
         all.push(...fresh);
         cursor = parseInt(fresh[fresh.length - 1].chapterIndex);
     }
-
     if (!all.length) return [];
     all.sort((a,b) => a.chapterIndex - b.chapterIndex);
-
     return all.map((ep, i) => {
         const cdn  = ep.cdnList ? (ep.cdnList.find(c => c.isDefault===1) || ep.cdnList[0]) : null;
         const vids = cdn?.videoPathList || [];
@@ -289,89 +279,49 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', ts: Date.now() });
 });
 
-// ── GET /api/test-stream ──────────────────────────────────────────────────────
-// Test apakah proxy decrypt berfungsi (tanpa perlu rawUrl dari Firestore)
-app.get('/api/test-stream', async (req, res) => {
-    const decryptBase = 'https://nb-dramabox-gentoken.vercel.app/decrypt-video?url=';
-    // URL sample yang disediakan dari petunjuk (episode 1 drama 42000011213)
-    const sampleRaw   = req.query.url || 
-        'https://hwztakavideo.dramaboxdb.com/8f9ec12df264a795de0b1277e6df06a6/69ff6810/77/3x1/31x2/312x1/31211000024/700723977_1/700723977.encrypt.mp4?etavirp_nuyila=1';
-    const proxyUrl    = decryptBase + encodeURIComponent(sampleRaw);
-
-    try {
-        const r = await axios.get(proxyUrl, {
-            responseType: 'stream',
-            maxRedirects: 5,
-            timeout: 10000,
-            headers: { 'Range': 'bytes=0-65535' }  // ambil 64KB saja untuk tes
-        });
-        const ct = r.headers['content-type'] || 'video/mp4';
-        res.status(206).setHeader('Content-Type', ct);
-        res.setHeader('Accept-Ranges', 'bytes');
-        res.setHeader('X-Proxy-Status', 'ok');
-        r.data.pipe(res);
-    } catch(e) {
-        res.status(502).json({ error: e.message, hint: 'Proxy decrypt gagal. Periksa koneksi Vercel.' });
-    }
-});
-
-// ── GET /api/decrypt?url= ────────────────────────────────────────────────────
-// Proxy video stream terenkripsi melalui decrypt service
+// ── GET /api/decrypt?url= ─────────────────────────────────────────────────────
+// FALLBACK proxy: dipakai jika player tidak bisa load langsung dari decrypt service.
+// Primary method: player langsung pakai URL decrypt service tanpa melalui sini.
 app.get('/api/decrypt', async (req, res) => {
     const rawUrl = req.query.url;
     if (!rawUrl) return res.status(400).json({ error: 'Parameter url wajib ada.' });
 
-    // Validasi URL
-    let parsedUrl;
-    try { parsedUrl = new URL(rawUrl); }
+    try { new URL(rawUrl); }
     catch { return res.status(400).json({ error: 'URL tidak valid.' }); }
 
-    const decryptServiceUrl = `https://nb-dramabox-gentoken.vercel.app/decrypt-video?url=${encodeURIComponent(rawUrl)}`;
+    const decryptUrl = `${API_BASE}/decrypt-video?url=${encodeURIComponent(rawUrl)}`;
 
     try {
         const range = req.headers['range'];
 
-        const upstreamResp = await axios({
+        const upstream = await axios({
             method:       'get',
-            url:          decryptServiceUrl,
+            url:          decryptUrl,
             responseType: 'stream',
             maxRedirects: 5,
-            timeout:      30000,
+            timeout:      60000,
             headers:      range ? { 'Range': range } : {}
         });
 
-        // Gunakan content-type dari upstream, fallback ke video/mp4
-        const contentType = upstreamResp.headers['content-type'] || 'video/mp4';
+        // Teruskan content-type dari upstream (tidak hardcode)
+        const ct = upstream.headers['content-type'] || 'video/mp4';
 
-        // Teruskan status HTTP (200 OK atau 206 Partial Content)
-        res.status(upstreamResp.status);
-
-        // Header wajib agar video bisa diputar dan di-seek di browser
-        res.setHeader('Content-Type',  contentType);
+        res.status(upstream.status);
+        res.setHeader('Content-Type',  ct);
         res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Cache-Control', 'public, max-age=3600');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
 
-        if (upstreamResp.headers['content-range'])  res.setHeader('Content-Range',  upstreamResp.headers['content-range']);
-        if (upstreamResp.headers['content-length']) res.setHeader('Content-Length', upstreamResp.headers['content-length']);
+        if (upstream.headers['content-range'])  res.setHeader('Content-Range',  upstream.headers['content-range']);
+        if (upstream.headers['content-length']) res.setHeader('Content-Length', upstream.headers['content-length']);
 
-        // Stream video langsung ke browser
-        upstreamResp.data.pipe(res);
-
-        // Tangani error saat streaming berjalan
-        upstreamResp.data.on('error', err => {
-            if (!res.headersSent) res.status(502).end();
-        });
+        upstream.data.pipe(res);
+        upstream.data.on('error', () => { if (!res.headersSent) res.status(502).end(); });
 
     } catch(e) {
-        if (!res.headersSent) {
-            res.status(502).json({
-                error:  e.message,
-                detail: 'Gagal menghubungi decrypt service.',
-                url:    rawUrl
-            });
-        }
+        if (!res.headersSent)
+            res.status(502).json({ error: e.message, url: rawUrl });
     }
 });
 
@@ -380,17 +330,13 @@ app.get('/api/episodes/:bookId', async (req, res) => {
     const { bookId } = req.params;
     if (!bookId) return res.status(400).json({ error: 'bookId wajib diisi.' });
     try {
-        // Prioritas: ambil dari Firestore dulu
         const snap = await db.collection('episodes').doc(String(bookId)).get();
         if (snap.exists) {
             const chapters = snap.data().chapters || [];
             if (chapters.length > 0) return res.json(chapters);
         }
-
-        // Fallback: scrape langsung
         const ok = await ensureToken();
         if (!ok) return res.status(502).json({ error: 'Gagal inisialisasi token.' });
-
         const episodes = await scrapeEpisodes(bookId);
         if (!episodes.length) return res.status(404).json({ error: 'Tidak ada episode ditemukan.' });
         res.json(episodes);
@@ -401,29 +347,22 @@ app.get('/api/episodes/:bookId', async (req, res) => {
 // ─── Routes: Admin ────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── POST /api/admin/scrape-all-episodes ──────────────────────────────────────
 app.post('/api/admin/scrape-all-episodes', async (req, res) => {
     if (!checkAdmin(req, res)) return;
-
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
-
     const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-
     try {
         const ok = await ensureToken();
         if (!ok) { send({ type: 'error', error: 'Gagal inisialisasi token.' }); return res.end(); }
-
         let bookIds = req.body?.bookIds;
         if (!Array.isArray(bookIds) || !bookIds.length) {
             const snap = await db.collection('dramas').get();
             bookIds = snap.docs.map(d => d.id);
         }
-
         send({ type: 'start', total: bookIds.length });
-
         let done = 0, failed = 0;
         for (const bookId of bookIds) {
             try {
@@ -441,9 +380,7 @@ app.post('/api/admin/scrape-all-episodes', async (req, res) => {
             }
         }
         send({ type: 'done', total: bookIds.length, failed });
-    } catch(e) {
-        send({ type: 'error', error: e.message });
-    }
+    } catch(e) { send({ type: 'error', error: e.message }); }
     res.end();
 });
 
@@ -455,10 +392,7 @@ app.post('/api/admin/scrape-catalog', async (req, res) => {
         const catalog = await scrapeCatalog();
         if (!catalog.length) return res.status(502).json({ error: 'Katalog kosong.' });
         const batch = db.batch();
-        catalog.forEach(d => {
-            const ref = db.collection('dramas').doc(d.bookId);
-            batch.set(ref, d, { merge: true });
-        });
+        catalog.forEach(d => { batch.set(db.collection('dramas').doc(d.bookId), d, { merge: true }); });
         await batch.commit();
         res.json({ success: true, total: catalog.length });
     } catch(e) { res.status(500).json({ error: e.message }); }
@@ -512,8 +446,7 @@ app.post('/api/admin/lock-episodes', async (req, res) => {
     try {
         const locked = Array.isArray(lockedEpisodes) ? lockedEpisodes.map(Number) : [];
         await db.collection('dramas').doc(String(bookId)).update({
-            lockedEpisodes: locked,
-            lastModified: admin.firestore.FieldValue.serverTimestamp()
+            lockedEpisodes: locked, lastModified: admin.firestore.FieldValue.serverTimestamp()
         });
         res.json({ success: true, bookId, lockedEpisodes: locked });
     } catch(e) { res.status(500).json({ error: e.message }); }
