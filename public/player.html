@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pendi Player</title>
+
+    <!-- Plyr HARUS di <head> agar siap sebelum modul JS jalan -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+        /* ── Setup bar (muncul kalau API belum dikonfigurasi) ── */
+        #setup-bar {
+            display: none;
+            background: #2d1b00; border-bottom: 2px solid #f59e0b;
+            padding: 10px 20px; font-size: 0.82rem;
+            align-items: center; gap: 10px; flex-wrap: wrap;
+        }
+        #setup-bar.show { display: flex; }
+        #setup-bar span { color: #fbbf24; font-weight: 600; }
+        #setup-bar input {
+            flex: 1; min-width: 220px; padding: 6px 12px;
+            background: #0d1117; border: 1px solid #f59e0b;
+            border-radius: 6px; color: #fff; font-size: 0.82rem; outline: none;
+        }
+        #setup-bar button {
+            padding: 6px 14px; background: #f59e0b; color: #000;
+            border: none; border-radius: 6px; font-weight: 700;
+            cursor: pointer; font-size: 0.82rem;
+        }
+
+        /* ── Header ── */
+        header {
+            padding: 14px 20px; border-bottom: 1px solid #21262d;
+            background: rgba(13,17,23,0.95); backdrop-filter: blur(8px);
+            position: sticky; top: 0; z-index: 10;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .back-btn {
+            background: #161b22; border: 1px solid #30363d; color: #e6edf3;
+            padding: 6px 12px; border-radius: 8px; cursor: pointer;
+            font-size: 0.82rem; text-decoration: none; transition: border-color 0.15s;
+        }
+        .back-btn:hover { border-color: #2dd4bf; }
+        header h1 { font-size: 1rem; font-weight: 700; flex: 1; }
+
+        #qualitySelect {
+            background: #161b22; border: 1px solid #30363d; color: #e6edf3;
+            border-radius: 6px; padding: 5px 10px; font-size: 0.8rem; cursor: pointer; outline: none;
+        }
+
+        /* ── Video Player (FIX ukuran) ── */
+        :root { --plyr-color-main: #0d9488; }
+
+        .player-section {
+            background: #000; width: 100%;
+            /* aspect ratio 16:9 agar tinggi proporsional */
+            aspect-ratio: 16 / 9;
+            max-height: 65vh;
+            position: relative; overflow: hidden;
+        }
+        .player-section video,
+        .player-section .plyr,
+        .player-section .plyr--video,
+        .player-section .plyr__video-wrapper {
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 200px;
+        }
+        .player-section video { object-fit: contain; background: #000; }
+
+        /* ── Status overlay (loading / error) ── */
+        #player-overlay {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.75); color: #fff;
+            font-size: 0.9rem; gap: 10px; z-index: 5;
+        }
+        #player-overlay.hidden { display: none; }
+        #overlay-icon { font-size: 2.5rem; }
+        #overlay-msg  { max-width: 280px; text-align: center; line-height: 1.5; }
+        #overlay-retry {
+            padding: 7px 18px; background: #0d9488; border: none;
+            border-radius: 8px; color: #fff; font-weight: 700;
+            cursor: pointer; font-size: 0.82rem; display: none;
+        }
+
+        /* ── Info ── */
+        .info-section { padding: 14px 20px; border-bottom: 1px solid #21262d; }
+        .info-section h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+        .now-playing  { font-size: 0.85rem; color: #2dd4bf; min-height: 20px; }
+
+        /* ── Test proxy bar ── */
+        #test-bar {
+            padding: 8px 20px; font-size: 0.78rem;
+            background: #0f1117; border-bottom: 1px solid #21262d;
+            display: flex; align-items: center; gap: 8px;
+        }
+        #test-status { color: #555; }
+        #test-status.ok   { color: #4ade80; }
+        #test-status.fail { color: #f87171; }
+        #btn-test {
+            padding: 3px 10px; background: transparent; border: 1px solid #30363d;
+            color: #8b949e; border-radius: 5px; cursor: pointer; font-size: 0.75rem;
+        }
+        #btn-test:hover { border-color: #2dd4bf; color: #fff; }
+
+        /* ── Episodes ── */
+        .episodes-section { padding: 20px; }
+        .episodes-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 14px;
+        }
+        .episodes-header h3 { font-size: 0.9rem; color: #8b949e; font-weight: 600; }
+        .ep-count { font-size: 0.75rem; background: rgba(139,148,158,0.15); color: #8b949e; padding: 4px 10px; border-radius: 6px; }
+
+        .ep-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+        @media (max-width: 360px) { .ep-grid { grid-template-columns: repeat(4, 1fr); } }
+
+        .ep-btn {
+            aspect-ratio: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 4px;
+            background: #161b22; border: 1px solid #21262d;
+            border-radius: 10px; cursor: pointer; font-size: 0.75rem;
+            font-weight: 600; color: #e6edf3; transition: all 0.18s ease;
+        }
+        .ep-btn:hover  { border-color: rgba(45,212,191,0.4); background: #1c2129; }
+        .ep-btn.active { background: #0d9488; border-color: #0d9488; box-shadow: 0 0 16px rgba(13,148,136,0.35); transform: scale(1.04); }
+
+        .state-msg  { color: #8b949e; text-align: center; padding: 40px 0; grid-column: 1/-1; }
+        .loading    { color: #2dd4bf; text-align: center; padding: 40px 0; grid-column: 1/-1; }
+    </style>
+</head>
+<body>
+
+<!-- Setup bar: muncul jika URL API belum dikonfigurasi -->
+<div id="setup-bar">
+    <span>⚠️ Atur URL API Vercel kamu:</span>
+    <input type="url" id="inp-setup-url" placeholder="https://nama-app.vercel.app">
+    <button onclick="saveApiUrl()">Simpan</button>
+</div>
+
+<header>
+    <a class="back-btn" href="index.html">← Kembali</a>
+    <h1 id="headerTitle">Pendi Player</h1>
+    <select id="qualitySelect" style="display:none" onchange="changeQuality()">
+        <option value="">Kualitas</option>
+    </select>
+</header>
+
+<!-- Video player -->
+<div class="player-section" id="playerSection">
+    <video id="mainPlayer" playsinline></video>
+    <div id="player-overlay">
+        <span id="overlay-icon">🎬</span>
+        <span id="overlay-msg">Pilih episode untuk mulai memutar.</span>
+        <button id="overlay-retry" onclick="retryPlay()">↺ Coba Lagi</button>
+    </div>
+</div>
+
+<!-- Info -->
+<div class="info-section">
+    <h2 id="dramaTitle">Memuat Drama...</h2>
+    <div class="now-playing" id="nowPlaying">—</div>
+</div>
+
+<!-- Test proxy bar -->
+<div id="test-bar">
+    <span id="test-status">Proxy belum diuji</span>
+    <button id="btn-test" onclick="testProxy()">Tes Koneksi API</button>
+</div>
+
+<!-- Episode grid -->
+<div class="episodes-section">
+    <div class="episodes-header">
+        <h3>Episodes</h3>
+        <span class="ep-count" id="epCount"></span>
+    </div>
+    <div id="epGrid" class="ep-grid">
+        <div class="loading">⏳ Mengambil data dari Firestore...</div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey:            "AIzaSyAbq9J5HDASVnqn13VwRAOd_u1MdEWj3bE",
+        authDomain:        "drama-short-668af.firebaseapp.com",
+        projectId:         "drama-short-668af",
+        storageBucket:     "drama-short-668af.firebasestorage.app",
+        messagingSenderId: "216564303270",
+        appId:             "1:216564303270:web:13633390eb9543196a3b67"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+
+    // ── Baca ID drama dari URL ────────────────────────────────────────────────
+    const BOOK_ID = new URLSearchParams(location.search).get('id');
+    if (!BOOK_ID) {
+        document.getElementById('dramaTitle').textContent = 'ID drama tidak ditemukan';
+        document.getElementById('epGrid').innerHTML = '<div class="state-msg">❌ Buka drama dari halaman daftar.</div>';
+        throw new Error('No drama ID');
+    }
+
+    // ── URL API Vercel ────────────────────────────────────────────────────────
+    function getApiBase() {
+        return (localStorage.getItem('pd_api') || '').replace(/\/$/, '');
+    }
+    function getProxyUrl(rawUrl) {
+        return `${getApiBase()}/api/decrypt?url=${encodeURIComponent(rawUrl)}`;
+    }
+
+    // Expose untuk setup-bar
+    window.saveApiUrl = function() {
+        const val = document.getElementById('inp-setup-url').value.trim().replace(/\/$/, '');
+        if (!val) return;
+        localStorage.setItem('pd_api', val);
+        document.getElementById('setup-bar').classList.remove('show');
+        document.getElementById('test-status').textContent = 'URL disimpan. Klik "Tes Koneksi API".';
+        document.getElementById('test-status').className = '';
+    };
+
+    // Cek apakah API URL sudah ada
+    if (!getApiBase()) {
+        const setupBar = document.getElementById('setup-bar');
+        setupBar.classList.add('show');
+        const saved = localStorage.getItem('pd_api');
+        if (saved) document.getElementById('inp-setup-url').value = saved;
+    }
+
+    // ── Init Plyr ─────────────────────────────────────────────────────────────
+    // Plyr sudah dimuat di <head>, jadi langsung bisa dipakai
+    const player = new Plyr('#mainPlayer', {
+        controls: ['play-large', 'play', 'rewind', 'fast-forward', 'progress',
+                   'current-time', 'duration', 'mute', 'volume', 'fullscreen'],
+        seekTime: 10,
+        resetOnEnd: false
+    });
+
+    const overlayEl   = document.getElementById('player-overlay');
+    const overlayIcon = document.getElementById('overlay-icon');
+    const overlayMsg  = document.getElementById('overlay-msg');
+    const overlayRetry = document.getElementById('overlay-retry');
+    const nowPlayingEl = document.getElementById('nowPlaying');
+    const qualitySelect = document.getElementById('qualitySelect');
+
+    let activeBtn    = null;
+    let currentEp    = null;
+    let currentIndex = 0;
+
+    function showOverlay(icon, msg, showRetry = false) {
+        overlayIcon.textContent  = icon;
+        overlayMsg.textContent   = msg;
+        overlayRetry.style.display = showRetry ? 'block' : 'none';
+        overlayEl.classList.remove('hidden');
+    }
+    function hideOverlay() { overlayEl.classList.add('hidden'); }
+
+    // Error saat video gagal dimuat
+    player.on('error', () => {
+        showOverlay('❌', 'Video gagal dimuat. Mungkin URL sudah kadaluarsa.\nCoba refresh episode dengan Admin Panel.', true);
+    });
+    player.on('playing', () => hideOverlay());
+    player.on('waiting', () => {
+        overlayIcon.textContent = '⏳';
+        overlayMsg.textContent  = 'Buffering...';
+        overlayEl.classList.remove('hidden');
+    });
+
+    window.retryPlay = function() {
+        if (currentEp) playEpisode(currentEp, activeBtn, currentIndex);
+    };
+
+    // ── Ganti kualitas ────────────────────────────────────────────────────────
+    window.changeQuality = function() {
+        const newUrl = qualitySelect.value;
+        if (!newUrl || !currentEp) return;
+        const t = player.currentTime;
+        showOverlay('⏳', 'Mengganti kualitas...');
+        player.source = { type: 'video', sources: [{ src: newUrl, type: 'video/mp4' }] };
+        player.once('loadedmetadata', () => { player.currentTime = t; player.play(); });
+    };
+
+    // ── Tes koneksi proxy ─────────────────────────────────────────────────────
+    window.testProxy = async function() {
+        const statusEl = document.getElementById('test-status');
+        const apiBase  = getApiBase();
+        if (!apiBase) {
+            statusEl.textContent = '⚠️ URL API belum dikonfigurasi';
+            statusEl.className   = 'fail';
+            document.getElementById('setup-bar').classList.add('show');
+            return;
+        }
+        statusEl.textContent = '⏳ Menguji koneksi...';
+        statusEl.className   = '';
+        try {
+            const r = await fetch(`${apiBase}/api/test-stream`, { method: 'GET', headers: { 'Range': 'bytes=0-1023' } });
+            if (r.ok || r.status === 206) {
+                statusEl.textContent = `✅ Proxy OK — API berfungsi! (${apiBase})`;
+                statusEl.className   = 'ok';
+            } else {
+                statusEl.textContent = `❌ Proxy error ${r.status}: ${await r.text().catch(()=>'')}`;
+                statusEl.className   = 'fail';
+            }
+        } catch(e) {
+            statusEl.textContent = `❌ Tidak bisa terhubung ke API: ${e.message}`;
+            statusEl.className   = 'fail';
+        }
+    };
+
+    // ── Play episode ──────────────────────────────────────────────────────────
+    function playEpisode(ep, btn, index) {
+        currentEp    = ep;
+        currentIndex = index;
+
+        if (activeBtn) activeBtn.classList.remove('active');
+        activeBtn = btn;
+        btn.classList.add('active');
+        btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        const rawUrl = ep.rawUrl || ep.playUrl;
+        if (!rawUrl) {
+            showOverlay('⚠️', 'URL video tidak tersedia untuk episode ini.');
+            return;
+        }
+
+        const apiBase = getApiBase();
+        if (!apiBase) {
+            showOverlay('⚙️', 'URL API Vercel belum dikonfigurasi.\nIsi di bar kuning di atas.', false);
+            document.getElementById('setup-bar').classList.add('show');
+            return;
+        }
+
+        const proxiedUrl = getProxyUrl(rawUrl);
+
+        showOverlay('⏳', 'Memuat video...');
+        nowPlayingEl.textContent = `▶ Memutar: ${ep.title || `Episode ${index + 1}`}`;
+
+        // Set sumber video ke proxy
+        player.source = {
+            type:    'video',
+            sources: [{ src: proxiedUrl, type: 'video/mp4' }]
+        };
+
+        // Isi selector kualitas jika ada multi-source
+        const sources = ep.sources || [];
+        if (sources.length > 1) {
+            qualitySelect.style.display = 'block';
+            qualitySelect.innerHTML = sources.map(s =>
+                `<option value="${getProxyUrl(s.rawUrl)}">${s.quality ? s.quality + 'p' : 'Kualitas'}</option>`
+            ).join('');
+        } else {
+            qualitySelect.style.display = 'none';
+        }
+
+        player.play().catch(() => {});
+    }
+
+    // ── Muat data dari Firestore ──────────────────────────────────────────────
+    async function loadDrama() {
+        try {
+            const dramaSnap = await getDoc(doc(db, 'dramas', BOOK_ID));
+            if (dramaSnap.exists()) {
+                const d     = dramaSnap.data();
+                const title = d.title || 'Drama Tanpa Judul';
+                document.getElementById('dramaTitle').textContent  = title;
+                document.getElementById('headerTitle').textContent = title;
+                if (d.cover) player.poster = d.cover;
+            }
+
+            const epSnap = await getDoc(doc(db, 'episodes', BOOK_ID));
+            if (!epSnap.exists()) {
+                document.getElementById('epGrid').innerHTML =
+                    '<div class="state-msg">❌ Data episode tidak ditemukan.<br>Gunakan Admin Panel → Scrape Drama untuk menambahkan.</div>';
+                return;
+            }
+
+            const chapters = epSnap.data().chapters || [];
+            document.getElementById('epCount').textContent = `${chapters.length} Episode`;
+
+            const grid = document.getElementById('epGrid');
+            grid.innerHTML = '';
+
+            chapters.forEach((ep, i) => {
+                const btn = document.createElement('button');
+                btn.className   = 'ep-btn';
+                btn.textContent = ep.title || (i + 1);
+                btn.title       = ep.title || `Episode ${i + 1}`;
+                btn.addEventListener('click', () => playEpisode(ep, btn, i));
+                grid.appendChild(btn);
+
+                // Auto-play episode pertama setelah render
+                if (i === 0) setTimeout(() => btn.click(), 400);
+            });
+
+        } catch(err) {
+            document.getElementById('epGrid').innerHTML =
+                `<div class="state-msg">❌ Gagal memuat data: ${err.message}</div>`;
+        }
+    }
+
+    loadDrama();
+</script>
+</body>
+</html>
