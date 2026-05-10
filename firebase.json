@@ -2,10 +2,11 @@
   "hosting": {
     "public": "public",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
+    "redirects": [
       {
-        "source": "/api/**",
-        "destination": "https://dracin2-neon.vercel.app/api/**"
+        "source": "/api/:path*",
+        "destination": "https://dracin2-neon.vercel.app/api/:path*",
+        "type": 301
       }
     ]
   },
