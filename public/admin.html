@@ -144,6 +144,25 @@
 
   <div class="container">
 
+    <!-- Tes Koneksi API -->
+    <div class="card">
+      <h2>🔌 Tes Koneksi API <span class="badge badge-green">Status</span></h2>
+      <p class="small">Pastikan URL API dan koneksi ke decrypt service berfungsi sebelum scraping.</p>
+      <hr>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field">
+          <label>URL API Vercel (ubah jika perlu)</label>
+          <input type="url" id="inp-apiurl-test" placeholder="https://nama-app.vercel.app">
+        </div>
+        <button class="btn-teal" id="btn-test-api" onclick="testApiConnection()">🔌 Tes Koneksi</button>
+      </div>
+      <div class="row">
+        <button class="btn-ghost" id="btn-test-decrypt" onclick="testDecryptService()">🎬 Tes Decrypt Service</button>
+        <span style="font-size:0.78rem;color:#888;align-self:center">nb-dramabox-gentoken.vercel.app</span>
+      </div>
+      <div class="log" id="log-test"></div>
+    </div>
+
     <!-- Scrape Semua Episode -->
     <div class="card">
       <h2>⚡ Scrape Semua Episode <span class="badge badge-teal">Otomatis</span></h2>
@@ -328,13 +347,6 @@ async function doLogin(silent = false) {
 function showLoginErr(msg) {
     const el = document.getElementById('login-err');
     el.textContent = '⚠️ ' + msg; el.style.display = 'block';
-}
-
-function showApp() {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('hdr-url').textContent = API_URL;
-    document.getElementById('bar-url').value = API_URL;
 }
 
 function doLogout() {
@@ -557,7 +569,65 @@ async function updateInfo() {
     setBtn('info', false, '✏️ Update');
 }
 
-// ── Delete Drama ──────────────────────────────────────────────────────────────
+// ── Tes Koneksi ───────────────────────────────────────────────────────────────
+function showApp() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('hdr-url').textContent = API_URL;
+    document.getElementById('bar-url').value = API_URL;
+    document.getElementById('inp-apiurl-test').value = API_URL;
+}
+
+async function testApiConnection() {
+    const url = (document.getElementById('inp-apiurl-test').value.trim()||API_URL).replace(/\/$/,'');
+    if (!url) { alert('Masukkan URL API terlebih dahulu.'); return; }
+    clearLog('test');
+    setBtn('test-api', true, 'Menguji...');
+    log('test', `Menguji koneksi ke ${url}/api/health ...`, 'info');
+    try {
+        const start = Date.now();
+        const res   = await fetch(`${url}/api/health`);
+        const ms    = Date.now()-start;
+        if (res.ok) {
+            const data = await res.json().catch(()=>({}));
+            log('test', `✅ API OK — status: ${data.status||'ok'} (${ms}ms)`, 'ok');
+            // Update URL jika berbeda
+            if (url !== API_URL) {
+                API_URL = url;
+                localStorage.setItem('pd_api', url);
+                document.getElementById('bar-url').value = url;
+                log('test', `ℹ️ URL API diperbarui ke: ${url}`, 'info');
+            }
+        } else {
+            log('test', `❌ API merespons dengan status ${res.status}. Cek deployment Vercel.`, 'err');
+        }
+    } catch(e) {
+        log('test', `❌ Gagal terhubung: ${e.message}`, 'err');
+        log('test', 'Pastikan URL benar dan aplikasi sudah di-deploy ke Vercel.', 'warn');
+    }
+    setBtn('test-api', false, '🔌 Tes Koneksi');
+}
+
+async function testDecryptService() {
+    clearLog('test');
+    setBtn('test-decrypt', true, 'Menguji...');
+    log('test', 'Menguji decrypt service...', 'info');
+    try {
+        const res = await fetch('https://nb-dramabox-gentoken.vercel.app/', { signal: AbortSignal.timeout(8000) });
+        const data = await res.json().catch(()=>({}));
+        if (data.status) {
+            log('test', `✅ Decrypt service AKTIF — ${data.message||''}`, 'ok');
+            if (data.endpoints) log('test', `Endpoints: ${data.endpoints.join(', ')}`, 'info');
+        } else {
+            log('test', `⚠️ Decrypt service merespons tapi status tidak OK.`, 'warn');
+        }
+    } catch(e) {
+        log('test', `❌ Tidak bisa terhubung ke decrypt service: ${e.message}`, 'err');
+    }
+    setBtn('test-decrypt', false, '🎬 Tes Decrypt Service');
+}
+
+// ── Delete Drama ───────────────────────────────────────────────────────────────
 async function deleteDrama() {
     const bookId = document.getElementById('inp-del-id').value.trim();
     if (!bookId) { alert('Book ID wajib diisi!'); return; }
