@@ -2,7 +2,7 @@
  * Pendi Drama Player — API (Firebase Functions / Vercel)
  * * PERBAIKAN UTAMA:
  * GET  /api/decrypt           → Support Range headers (FIX Blank Screen & Seeking)
- * GET  /api/episodes/:bookId  → scrape episode langsung (tanpa simpan ke Firestore)
+ * GET  /api/episodes/:bookId  → Tetap prioritaskan data dari Firestore
  */
 
 const admin   = require('firebase-admin');
@@ -272,7 +272,7 @@ async function saveDramaToFirestore(bookId, dramaData, episodes) {
 // ─── Routes: Public ───────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── GET /api/decrypt?url= (FIX BLANK HITAM) ───────────────────────────────────
+// ── GET /api/decrypt?url= (FIX BLANK & SEEKING) ───────────────────────────────
 app.get('/api/decrypt', async (req, res) => {
     const url = req.query.url;
     if (!url) return res.status(400).json({ error: 'Missing url' });
@@ -294,7 +294,7 @@ app.get('/api/decrypt', async (req, res) => {
         // Teruskan status (200 atau 206 Partial Content)
         res.status(response.status);
 
-        // Header wajib agar gambar muncul dan video bisa dimajukan
+        // Header wajib agar video bisa dimajukan dan gambar muncul
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Cache-Control', 'public, max-age=3600');
@@ -309,20 +309,22 @@ app.get('/api/decrypt', async (req, res) => {
     }
 });
 
-// ── GET /api/episodes/:bookId ────────────────────────────────────────────────
+// ── GET /api/episodes/:bookId (FIRESTORE PRIORITAS) ──────────────────────────
 app.get('/api/episodes/:bookId', async (req, res) => {
     const { bookId } = req.params;
     if (!bookId) return res.status(400).json({ error: 'bookId wajib diisi.' });
     try {
-        const ok = await ensureToken();
-        if (!ok) return res.status(502).json({ error: 'Gagal inisialisasi token.' });
-
+        // 1. CEK FIRESTORE TERLEBIH DAHULU (Prioritas Utama)
         const snap = await db.collection('episodes').doc(String(bookId)).get();
         if (snap.exists) {
             const data = snap.data();
             const chapters = data.chapters || [];
             if (chapters.length > 0) return res.json(chapters);
         }
+
+        // 2. Jika tidak ada di Firestore, baru lakukan scrape (Fallback)
+        const ok = await ensureToken();
+        if (!ok) return res.status(502).json({ error: 'Gagal inisialisasi token.' });
 
         const episodes = await scrapeEpisodes(bookId);
         if (!episodes.length) return res.status(404).json({ error: 'Tidak ada episode ditemukan.' });
@@ -360,11 +362,7 @@ app.post('/api/admin/scrape-all-episodes', async (req, res) => {
                 if (episodes.length) {
                     const dramaSnap = await db.collection('dramas').doc(String(bookId)).get();
                     const dramaData = dramaSnap.exists ? dramaSnap.data() : { bookId: String(bookId) };
-                    await saveDramaToFirestore(bookId, {
-                        ...dramaData, bookId: String(bookId),
-                        totalEps: episodes.length,
-                        lastScraped: admin.firestore.FieldValue.serverTimestamp()
-                    }, episodes);
+                    await saveDramaToFirestore(bookId, dramaData, episodes);
                 }
                 done++;
                 send({ type: 'progress', bookId, episodeCount: episodes.length, done, total: bookIds.length, status: 'ok' });
@@ -397,7 +395,7 @@ app.post('/api/admin/scrape-catalog', async (req, res) => {
             batch.set(ref, d, { merge: true });
         });
         await batch.commit();
-        res.json({ success: true, total: catalog.length, message: `${catalog.length} drama disimpan.` });
+        res.json({ success: true, total: catalog.length });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -418,7 +416,7 @@ app.post('/api/admin/scrape-drama', async (req, res) => {
         dramaData.totalEps    = episodes.length;
         dramaData.lastScraped = admin.firestore.FieldValue.serverTimestamp();
         await saveDramaToFirestore(bookId, dramaData, episodes);
-        res.json({ success: true, total: episodes.length, message: `${episodes.length} episode disimpan.` });
+        res.json({ success: true, total: episodes.length });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -486,7 +484,7 @@ app.post('/api/admin/update-drama-info', async (req, res) => {
 
 app.post('/api/admin/verify', (req, res) => {
     if (!checkAdmin(req, res)) return;
-    res.json({ success: true, message: 'Admin key valid.' });
+    res.json({ success: true });
 });
 
 module.exports = app;
